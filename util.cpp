@@ -65,7 +65,7 @@ char *NextLineStripComments(char **s) {
   *s = eol ? eol + 1 : NULL;
   eol = eol ? eol : p + strlen(p);
   // strip comments
-  char *comment = memchr(p, '#', eol - p);
+  char *comment = static_cast<char *>(memchr(p, '#', eol - p));
   eol = comment ? comment : eol;
   // strip trailing whitespace
   while (eol > p && (eol[-1] == '\r' || eol[-1] == ' ' || eol[-1] == '\t'))
@@ -99,7 +99,7 @@ char *ReplaceFilenameWithNewPath(const char *old_path, const char *new_path) {
   size_t nlen = strlen(new_path) + 1;
   while (olen && old_path[olen - 1] != '/' && old_path[olen - 1] != '\\')
     olen--;
-  char *result = malloc(olen + nlen);
+  char *result = static_cast<char *>(malloc(olen + nlen));
   memcpy(result, old_path, olen);
   memcpy(result + olen, new_path, nlen);
   return result;
@@ -151,7 +151,7 @@ void ByteArray_Resize(ByteArray *arr, size_t new_size) {
     arr->capacity = new_size < minsize ? minsize : new_size;
     void *data = realloc(arr->data, arr->capacity);
     if (!data) Die("memory allocation failed");
-    arr->data = data;
+    arr->data = static_cast<uint8 *>(data);
   }
 }
 

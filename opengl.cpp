@@ -171,7 +171,7 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
 
   if (g_config.shader)
     g_glsl_shader = GlslShader_CreateFromFile(g_config.shader, g_opengl_es);
-  
+
   return true;
 }
 
@@ -184,7 +184,7 @@ static void OpenGLRenderer_BeginDraw(int width, int height, uint8 **pixels, int 
   if (size > g_screen_buffer_size) {
     g_screen_buffer_size = size;
     free(g_screen_buffer);
-    g_screen_buffer = malloc(size * 4);
+    g_screen_buffer = static_cast<uint8 *>(malloc(size * 4));
   }
 
   g_draw_width = width;
@@ -197,7 +197,7 @@ static void OpenGLRenderer_EndDraw() {
   int drawable_width, drawable_height;
 
   SDL_GL_GetDrawableSize(g_window, &drawable_width, &drawable_height);
-  
+
   int viewport_width = drawable_width, viewport_height = drawable_height;
 
   if (!g_config.ignore_aspect_ratio) {

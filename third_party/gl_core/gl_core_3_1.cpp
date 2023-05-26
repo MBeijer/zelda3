@@ -11,8 +11,9 @@
 #endif
 #endif /* SDLCALL */
 
-extern void *SDLCALL SDL_GL_GetProcAddress(const char *proc); 
-
+extern "C" {
+	extern void *SDLCALL SDL_GL_GetProcAddress(const char *proc);
+}
 #define IntGetProcAddress(name) SDL_GL_GetProcAddress(name)
 
 int ogl_ext_ARB_compressed_texture_pixel_storage = ogl_LOAD_FAILED;
@@ -2981,7 +2982,7 @@ static ogl_StrToExtMap *FindExtEntry(const char *extensionName)
 		if(strcmp(extensionName, currLoc->extensionName) == 0)
 			return currLoc;
 	}
-	
+
 	return NULL;
 }
 
@@ -3119,7 +3120,7 @@ int ogl_LoadFunctions()
 	ClearExtensionVars();
 	_ptrc_glGetString = (const GLubyte * (CODEGEN_FUNCPTR *)(GLenum))IntGetProcAddress("glGetString");
 	if(!_ptrc_glGetString) return ogl_LOAD_FAILED;
-	
+
 	if (ogl_GetMajorVersion() < 3)
 	{
 		ProcExtsFromExtString((const char *)_ptrc_glGetString(GL_EXTENSIONS));
@@ -3134,7 +3135,7 @@ int ogl_LoadFunctions()
 	}
 
 	numFailed = Load_Version_3_1();
-	
+
 	if(numFailed == 0)
 		return ogl_LOAD_SUCCEEDED;
 	else

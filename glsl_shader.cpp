@@ -28,7 +28,7 @@ static GlslPass *ParseConfigKeyPass(GlslShader *gs, const char *key, const char 
 }
 
 static uint8 ParseScaleType(const char *s) {
-  return StringEqualsNoCase(s, "source") ? GLSL_SOURCE : 
+  return StringEqualsNoCase(s, "source") ? GLSL_SOURCE :
          StringEqualsNoCase(s, "viewport") ? GLSL_VIEWPORT :
          StringEqualsNoCase(s, "absolute") ? GLSL_ABSOLUTE : GLSL_NONE;
 }
@@ -49,7 +49,7 @@ static void ParseTextures(GlslShader *gs, char *value) {
   char *id;
   GlslTexture **nextp = &gs->first_texture;
   for (int num = 0; (id = NextDelim(&value, ';')) != NULL && num < kGlslMaxTextures; num++) {
-    GlslTexture *t = calloc(sizeof(GlslTexture), 1);
+    GlslTexture *t = static_cast<GlslTexture *>(calloc(sizeof(GlslTexture), 1));
     t->id = strdup(id);
     t->wrap_mode = GL_CLAMP_TO_BORDER;
     t->filter = GL_NEAREST;
@@ -412,7 +412,7 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, t->wrap_mode);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, t->wrap_mode);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, t->filter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, t->mipmap ? 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, t->mipmap ?
                     (t->filter == GL_LINEAR ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST) : t->filter);
     if (t->filename) {
       char *new_filename = ReplaceFilenameWithNewPath(filename, t->filename);
@@ -421,7 +421,7 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
       if (!data) {
         fprintf(stderr, "Unable to read PNG '%s'\n", new_filename);
       } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, imw, imh, 0, 
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, imw, imh, 0,
                      (imn == 4) ? GL_RGBA : (imn == 3) ? GL_RGB : GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
       }
       free(data);
@@ -526,14 +526,14 @@ static void RenderCtx_SetGlslTextureUniform(RenderCtx *ctx, GlslTextureUniform *
 
 static void GlslShader_SetShaderVars(GlslShader *gs, RenderCtx *ctx, int pass) {
   GlslPass *p = &gs->pass[pass];
-    
+
   RenderCtx_SetGlslTextureUniform(ctx, &p->unif.Top, p[-1].width, p[-1].height, p[-1].gl_texture);
   if (p->unif.OutputSize >= 0) {
     float output_size[2] = { (float)p[0].width, (float)p[0].height };
     glUniform2fv(p->unif.OutputSize, 1, output_size);
   }
   if (p->unif.FrameCount >= 0)
-    glUniform1i(p->unif.FrameCount, p->frame_count_mod ? 
+    glUniform1i(p->unif.FrameCount, p->frame_count_mod ?
                 gs->frame_count % p->frame_count_mod : gs->frame_count);
   if (p->unif.FrameDirection >= 0)
     glUniform1i(p->unif.FrameDirection, 1);
@@ -616,7 +616,7 @@ void GlslShader_Render(GlslShader *gs, GlTextureWithSize *tex, int viewport_x, i
 
     uint filter = p->filter ? p->filter : (last_pass && g_config.linear_filtering) ? GL_LINEAR : GL_NEAREST;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, p->mipmap_input ? 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, p->mipmap_input ?
                     (filter == GL_LINEAR ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST) : filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, p->wrap_mode);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, p->wrap_mode);

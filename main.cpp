@@ -373,7 +373,7 @@ int main(int argc, char** argv) {
     }
     g_audio_channels = have.channels;
     g_frames_per_block = (534 * have.freq) / 32000;
-    g_audiobuffer = malloc(g_frames_per_block * have.channels * sizeof(int16));
+    g_audiobuffer = static_cast<uint8 *>(malloc(g_frames_per_block * have.channels * sizeof(int16)));
   }
 
   if (argc >= 1 && !g_run_without_emu)
@@ -650,7 +650,7 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
 }
 
 static void HandleInput(int keyCode, int keyMod, bool pressed) {
-  int j = FindCmdForSdlKey(keyCode, keyMod);
+  int j = FindCmdForSdlKey(keyCode, static_cast<SDL_Keymod>(keyMod));
   if (j != 0)
     HandleCommand(j, pressed);
 }
