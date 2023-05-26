@@ -46,150 +46,139 @@ static const uint16 kHudItemInVramPtr_Old[20] = {
 
 #define kHudItemInVramPtr (kNewStyleInventory ? kHudItemInVramPtr_New : kHudItemInVramPtr_Old)
 
-static const uint16 kHudBottlesGfx[128] = {
-  0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x255c, 0x2564, 0x2562, 0x2557, 0x2561, 0x255e, 0x255e, 0x255c,
-  0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x2551, 0x255e, 0x2563, 0x2563, 0x255b, 0x2554, 0x24f5, 0x24f5,
-  0x255b, 0x2558, 0x2555, 0x2554, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x255c, 0x2554, 0x2553, 0x2558, 0x2552, 0x2558, 0x255d, 0x2554,
-  0x255c, 0x2550, 0x2556, 0x2558, 0x2552, 0x24f5, 0x24f5, 0x24f5, 0x255c, 0x2554, 0x2553, 0x2558, 0x2552, 0x2558, 0x255d, 0x2554,
-  0x2552, 0x2564, 0x2561, 0x2554, 0x256a, 0x2550, 0x255b, 0x255b, 0x255c, 0x2554, 0x2553, 0x2558, 0x2552, 0x2558, 0x255d, 0x2554,
-  0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x2555, 0x2550, 0x2554, 0x2561, 0x2558, 0x2554, 0x24f5, 0x24f5,
-  0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x2551, 0x2554, 0x2554, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5,
-  0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x24f5, 0x2556, 0x255e, 0x255e, 0x2553, 0x24f5, 0x2551, 0x2554, 0x2554,
-};
-
 static const ItemBoxGfx kHudItemBottles[9] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2044, 0x2045, 0x2046, 0x2047},
-  {0x2837, 0x2838, 0x2cc3, 0x2cd3},
-  {0x24d2, 0x64d2, 0x24e2, 0x24e3},
-  {0x3cd2, 0x7cd2, 0x3ce2, 0x3ce3},
-  {0x2cd2, 0x6cd2, 0x2ce2, 0x2ce3},
-  {0x2855, 0x6855, 0x2c57, 0x2c5a},
-  {0x2837, 0x2838, 0x2839, 0x283a},
-  {0x2837, 0x2838, 0x2839, 0x283a},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2044, 0x2045, 0x2046, 0x2047}},
+  {{0x2837, 0x2838, 0x2cc3, 0x2cd3}},
+  {{0x24d2, 0x64d2, 0x24e2, 0x24e3}},
+  {{0x3cd2, 0x7cd2, 0x3ce2, 0x3ce3}},
+  {{0x2cd2, 0x6cd2, 0x2ce2, 0x2ce3}},
+  {{0x2855, 0x6855, 0x2c57, 0x2c5a}},
+  {{0x2837, 0x2838, 0x2839, 0x283a}},
+  {{0x2837, 0x2838, 0x2839, 0x283a}},
 };
 static const ItemBoxGfx kHudItemBow[5] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x28ba, 0x28e9, 0x28e8, 0x28cb},
-  {0x28ba, 0x284a, 0x2849, 0x28cb},
-  {0x28ba, 0x28e9, 0x28e8, 0x28cb},
-  {0x28ba, 0x28bb, 0x24ca, 0x28cb},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x28ba, 0x28e9, 0x28e8, 0x28cb}},
+  {{0x28ba, 0x284a, 0x2849, 0x28cb}},
+  {{0x28ba, 0x28e9, 0x28e8, 0x28cb}},
+  {{0x28ba, 0x28bb, 0x24ca, 0x28cb}},
 };
 static const ItemBoxGfx kHudItemBoomerang[3] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2cb8, 0x2cb9, 0x2cf5, 0x2cc9},
-  {0x24b8, 0x24b9, 0x24f5, 0x24c9},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2cb8, 0x2cb9, 0x2cf5, 0x2cc9}},
+  {{0x24b8, 0x24b9, 0x24f5, 0x24c9}},
 };
 static const ItemBoxGfx kHudItemHookshot[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x24f5, 0x24f6, 0x24c0, 0x24f5},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x24f5, 0x24f6, 0x24c0, 0x24f5}},
 };
 static const ItemBoxGfx kHudItemBombs[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2cb2, 0x2cb3, 0x2cc2, 0x6cc2},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2cb2, 0x2cb3, 0x2cc2, 0x6cc2}},
 };
 static const ItemBoxGfx kHudItemMushroom[3] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2444, 0x2445, 0x2446, 0x2447},
-  {0x203b, 0x203c, 0x203d, 0x203e},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2444, 0x2445, 0x2446, 0x2447}},
+  {{0x203b, 0x203c, 0x203d, 0x203e}},
 };
 static const ItemBoxGfx kHudItemFireRod[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x24b0, 0x24b1, 0x24c0, 0x24c1},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x24b0, 0x24b1, 0x24c0, 0x24c1}},
 };
 static const ItemBoxGfx kHudItemIceRod[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2cb0, 0x2cbe, 0x2cc0, 0x2cc1},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2cb0, 0x2cbe, 0x2cc0, 0x2cc1}},
 };
 static const ItemBoxGfx kHudItemBombos[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x287d, 0x287e, 0xe87e, 0xe87d},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x287d, 0x287e, 0xe87e, 0xe87d}},
 };
 static const ItemBoxGfx kHudItemEther[2] = {
-  {0x20f5, 0x20f5,  0x20f5,  0x20f5},
-  {0x2876, 0x2877, 0xE877, 0xE876},
+  {{0x20f5, 0x20f5,  0x20f5,  0x20f5}},
+  {{0x2876, 0x2877, 0xE877, 0xE876}},
 };
 static const ItemBoxGfx kHudItemQuake[2] = {
-  {0x20f5, 0x20f5,  0x20f5,  0x20f5},
-  {0x2866, 0x2867, 0xE867, 0xE866},
+  {{0x20f5, 0x20f5,  0x20f5,  0x20f5}},
+  {{0x2866, 0x2867, 0xE867, 0xE866}},
 };
 static const ItemBoxGfx kHudItemTorch[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x24bc, 0x24bd, 0x24cc, 0x24cd},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x24bc, 0x24bd, 0x24cc, 0x24cd}},
 };
 static const ItemBoxGfx kHudItemHammer[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x20b6, 0x20b7, 0x20c6, 0x20c7},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x20b6, 0x20b7, 0x20c6, 0x20c7}},
 };
 static const ItemBoxGfx kHudItemFlute[4] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x20d0, 0x20d1, 0x20e0, 0x20e1},
-  {0x2cd4, 0x2cd5, 0x2ce4, 0x2ce5},
-  {0x2cd4, 0x2cd5, 0x2ce4, 0x2ce5},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x20d0, 0x20d1, 0x20e0, 0x20e1}},
+  {{0x2cd4, 0x2cd5, 0x2ce4, 0x2ce5}},
+  {{0x2cd4, 0x2cd5, 0x2ce4, 0x2ce5}},
 };
 static const ItemBoxGfx kHudItemBugNet[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x3c40, 0x3c41, 0x2842, 0x3c43},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x3c40, 0x3c41, 0x2842, 0x3c43}},
 };
 static const ItemBoxGfx kHudItemBookMudora[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x3ca5, 0x3ca6, 0x3cd8, 0x3cd9},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x3ca5, 0x3ca6, 0x3cd8, 0x3cd9}},
 };
 static const ItemBoxGfx kHudItemCaneSomaria[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x24dc, 0x24dd, 0x24ec, 0x24ed},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x24dc, 0x24dd, 0x24ec, 0x24ed}},
 };
 static const ItemBoxGfx kHudItemCaneByrna[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2cdc, 0x2cdd, 0x2cec, 0x2ced},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2cdc, 0x2cdd, 0x2cec, 0x2ced}},
 };
 static const ItemBoxGfx kHudItemCape[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x24b4, 0x24b5, 0x24c4, 0x24c5},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x24b4, 0x24b5, 0x24c4, 0x24c5}},
 };
 static const ItemBoxGfx kHudItemMirror[4] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x28de, 0x28df, 0x28ee, 0x28ef},
-  {0x2c62, 0x2c63, 0x2c72, 0x2c73},
-  {0x2886, 0x2887, 0x2888, 0x2889},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x28de, 0x28df, 0x28ee, 0x28ef}},
+  {{0x2c62, 0x2c63, 0x2c72, 0x2c73}},
+  {{0x2886, 0x2887, 0x2888, 0x2889}},
 };
 static const ItemBoxGfx kHudItemGloves[3] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2130, 0x2131, 0x2140, 0x2141},
-  {0x28da, 0x28db, 0x28ea, 0x28eb},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2130, 0x2131, 0x2140, 0x2141}},
+  {{0x28da, 0x28db, 0x28ea, 0x28eb}},
 };
 static const ItemBoxGfx kHudItemBoots[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x3429, 0x342a, 0x342b, 0x342c},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x3429, 0x342a, 0x342b, 0x342c}},
 };
 static const ItemBoxGfx kHudItemFlippers[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2c9a, 0x2c9b, 0x2c9d, 0x2c9e},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2c9a, 0x2c9b, 0x2c9d, 0x2c9e}},
 };
 static const ItemBoxGfx kHudItemMoonPearl[2] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2433, 0x2434, 0x2435, 0x2436},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2433, 0x2434, 0x2435, 0x2436}},
 };
 static const ItemBoxGfx kHudItemEmpty[1] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
 };
 static const ItemBoxGfx kHudItemSword[5] = {
-  {0x20f5, 0x20f5, 0x20f5, 0x20f5},
-  {0x2c64, 0x2cce, 0x2c75, 0x3d25},
-  {0x2c8a, 0x2c65, 0x2474, 0x3d26},
-  {0x248a, 0x2465, 0x3c74, 0x2d48},
-  {0x288a, 0x2865, 0x2c74, 0x2d39},
+  {{0x20f5, 0x20f5, 0x20f5, 0x20f5}},
+  {{0x2c64, 0x2cce, 0x2c75, 0x3d25}},
+  {{0x2c8a, 0x2c65, 0x2474, 0x3d26}},
+  {{0x248a, 0x2465, 0x3c74, 0x2d48}},
+  {{0x288a, 0x2865, 0x2c74, 0x2d39}},
 };
 static const ItemBoxGfx kHudItemShield[4] = {
-  {0x24f5, 0x24f5, 0x24f5, 0x24f5},
-  {0x2cfd, 0x6cfd, 0x2cfe, 0x6cfe},
-  {0x34ff, 0x74ff, 0x349f, 0x749f},
-  {0x2880, 0x2881, 0x288d, 0x288e},
+  {{0x24f5, 0x24f5, 0x24f5, 0x24f5}},
+  {{0x2cfd, 0x6cfd, 0x2cfe, 0x6cfe}},
+  {{0x34ff, 0x74ff, 0x349f, 0x749f}},
+  {{0x2880, 0x2881, 0x288d, 0x288e}},
 };
 static const ItemBoxGfx kHudItemArmor[5] = {
-  {0x3c68, 0x7c68, 0x3c78, 0x7c78},
-  {0x2c68, 0x6c68, 0x2c78, 0x6c78},
-  {0x2468, 0x6468, 0x2478, 0x6478},
+  {{0x3c68, 0x7c68, 0x3c78, 0x7c78}},
+  {{0x2c68, 0x6c68, 0x2c78, 0x6c78}},
+  {{0x2468, 0x6468, 0x2478, 0x6478}},
 };
 
 
@@ -605,49 +594,65 @@ static void Hud_EquipItemBelow(uint8 *item) {  // 8ddf00
   } while (!Hud_DoWeHaveThisItem(*item));
 }
 
+int GetCurrentItemButtonIndex() {
+  if (enhanced_features0 & kFeatures0_SwitchLR) {
+    return (joypad1L_last & kJoypadL_X) ? 1 :
+           (joypad1L_last & kJoypadL_L) ? 2 :
+           (joypad1L_last & kJoypadL_R) ? 3 : 0;
+  }
+  return 0;
+}
+
+uint8 *GetCurrentItemButtonPtr(int i) {
+  return (i == 0) ? &hud_cur_item : 
+         (i == 1) ? &hud_cur_item_x : 
+         (i == 2) ? &hud_cur_item_l : &hud_cur_item_r;
+}
+
 void Hud_NormalMenu() {  // 8ddf15
   timer_for_flashing_circle++;
   if (!BYTE(joypad1H_last))
-    BYTE(tmp1) = 0;
+    BYTE(hud_tmp1) = 0;
 
-  if (filtered_joypad_H & 0x10) {  // start
+  if (filtered_joypad_H & kJoypadH_Start) {
     overworld_map_state = 5;
     sound_effect_2 = 18;
     return;
   }
 
   // Allow select to open the save/exit thing
-  if (joypad1H_last & 0x20 && sram_progress_indicator) {  // select
+  if (joypad1H_last & kJoypadH_Select && sram_progress_indicator) {
     BG3VOFS_copy2 = -8;
     Hud_CloseMenu();
     DisplaySelectMenu();
     return;
   }
 
-  if (joypad1H_last & 0x40 && !(joypad1L_last & 0x40) && (enhanced_features0 & kFeatures0_SwitchLR)) {
-    if (filtered_joypad_H & 8) {
+  if (joypad1H_last & kJoypadH_Y && !(joypad1L_last & kJoypadL_X) && (enhanced_features0 & kFeatures0_SwitchLR)) {
+    if (filtered_joypad_H & kJoypadH_Up) {
       Hud_ReorderItem(kNewStyleInventory ? -6 : -5);
-    } else if (filtered_joypad_H & 4) {
+    } else if (filtered_joypad_H & kJoypadH_Down) {
       Hud_ReorderItem(kNewStyleInventory ? 6 : 5);
-    } else if (filtered_joypad_H & 2) {
+    } else if (filtered_joypad_H & kJoypadH_Left) {
       Hud_ReorderItem(-1);
-    } else if (filtered_joypad_H & 1) {
+    } else if (filtered_joypad_H & kJoypadH_Right) {
       Hud_ReorderItem(1);
     }
-  } else if (!BYTE(tmp1)) {
-    // If the x button is down, then move the blue circle
-    uint8 *item_p = (joypad1L_last & 0x40 && (enhanced_features0 & kFeatures0_SwitchLR)) ? &hud_cur_item_x : &hud_cur_item;
+  } else if (!BYTE(hud_tmp1)) {
+    // If Special Key button is down, then move their circle
+    int btn_index = GetCurrentItemButtonIndex();
+    uint8 *item_p = GetCurrentItemButtonPtr(btn_index);
     uint16 old_item = *item_p;
-    if (filtered_joypad_H & 8) {
+    if (filtered_joypad_H & kJoypadH_Up) {
       Hud_EquipItemAbove(item_p);
-    } else if (filtered_joypad_H & 4) {
+    } else if (filtered_joypad_H & kJoypadH_Down) {
       Hud_EquipItemBelow(item_p);
-    } else if (filtered_joypad_H & 2) {
+    } else if (filtered_joypad_H & kJoypadH_Left) {
       Hud_EquipPrevItem(item_p);
-    } else if (filtered_joypad_H & 1) {
+    } else if (filtered_joypad_H & kJoypadH_Right) {
       Hud_EquipNextItem(item_p);
     }
-    BYTE(tmp1) = filtered_joypad_H;
+    BYTE(hud_tmp1) = filtered_joypad_H;
     if (*item_p != old_item) {
       timer_for_flashing_circle = 16;
       sound_effect_2 = 32;
@@ -753,11 +758,11 @@ void Hud_ExpandBottleMenu() {  // 8de08c
 
 void Hud_BottleMenu() {  // 8de0df
   timer_for_flashing_circle++;
-  if (filtered_joypad_H & 0x10) {
+  if (filtered_joypad_H & kJoypadH_Start) {
     sound_effect_2 = 18;
     overworld_map_state = 5;
-  } else if (filtered_joypad_H & 3) {
-    if (filtered_joypad_H & 2) {
+  } else if (filtered_joypad_H & (kJoypadH_Left | kJoypadH_Right)) {
+    if (filtered_joypad_H & kJoypadH_Left) {
       Hud_EquipPrevItem(&hud_cur_item);
     } else {
       Hud_EquipNextItem(&hud_cur_item);
@@ -771,10 +776,10 @@ void Hud_BottleMenu() {  // 8de0df
     return;
   }
   Hud_DrawBottleMenu_Update();
-  if (filtered_joypad_H & 12) {
+  if (filtered_joypad_H & (kJoypadH_Down | kJoypadH_Up)) {
     uint8 old_val = link_item_bottle_index - 1, val = old_val;
 
-    if (filtered_joypad_H & 8) {
+    if (filtered_joypad_H & kJoypadH_Up) {
       do {
         val = (val - 1) & 3;
       } while (!link_bottle_info[val]);
@@ -923,22 +928,80 @@ static const ItemBoxGfx *Hud_GetIconForItem(int i) {
   return &kHudItemBoxGfxPtrs[i - 1][item_val];
 }
 
+static void CopyTilesForSwitchLR(int switch_lr) {
+#define PV(a0,a1,a2,a3,a4,a5,a6,a7)  ((a0 & 1) << 7 | (a0 >> 1 & 1) << 15 | (a1 & 1) << 6 | (a1 >> 1 & 1) << 14 | (a2 & 1) <<5 | (a2 >> 1&1) <<13 | (a3 & 1) << 4 | (a3>> 1 & 1) << 12 | (a4 & 1) << 3 | (a4 >> 1 & 1) << 11 | (a5 & 1) << 2 | (a5 >> 1 & 1) << 10 | (a6 & 1) << 1 | (a6 >> 1 & 1) << 9 | (a7 & 1) << 0 | (a7 >> 1 & 1) << 8) 
+    
+  if (switch_lr == 3) {
+    static const uint16 kBytesForNewTile0xC_TopOfR[8] = {
+      PV(1,1,1,1,1,1,3,3),
+      PV(1,1,1,1,1,1,1,3),
+      PV(1,1,1,1,1,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,1,1,1,1,3)
+    };
+    memcpy(&g_zenv.vram[0x7000 + 0xc * 8], kBytesForNewTile0xC_TopOfR, sizeof(kBytesForNewTile0xC_TopOfR));
+
+    static const uint16 kBytesForNewTile0xD_BottomofR[8] = {
+      PV(1,1,1,1,1,1,3,3),
+      PV(1,1,1,3,1,1,1,3),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1),
+      PV(1,1,1,3,3,1,1,1)
+    };
+    memcpy(&g_zenv.vram[0x7000 + 0xd * 8], kBytesForNewTile0xD_BottomofR, sizeof(kBytesForNewTile0xD_BottomofR));
+  } else if (switch_lr == 2) {
+    static const uint16 kBytesForNewTile0xE_TopOfL[8] = {
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3)
+    };
+    memcpy(&g_zenv.vram[0x7000 + 0xe * 8], kBytesForNewTile0xE_TopOfL, sizeof(kBytesForNewTile0xE_TopOfL));
+
+    static const uint16 kBytesForNewTile0xF_BottomofL[8] = {
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,3,3,3,3,3),
+      PV(1,1,1,1,1,1,1,1),
+      PV(1,1,1,1,1,1,1,1),
+      PV(1,1,1,1,1,1,1,1)
+    };
+    memcpy(&g_zenv.vram[0x7000 + 0xf * 8], kBytesForNewTile0xF_BottomofL, sizeof(kBytesForNewTile0xF_BottomofL));
+  }
+#undef PV
+}
+
+static const uint8 kSwitchLR_palettes[] = { 7, 3, 4, 4 };
+
 void Hud_DrawYButtonItems() {  // 8de3d9
   uint16 *dst = uvram_screen.row[0].col;
   int x = kNewStyleInventory ? 0 : 1;
 
-  bool is_x = (joypad1L_last & 0x40 && (enhanced_features0 & kFeatures0_SwitchLR));
-  uint8 palette = is_x ? 3 : 7;
-  Hud_DrawBox(dst, x, 5, 20 - x, 19, palette);
+  int btn_index = GetCurrentItemButtonIndex();
+  CopyTilesForSwitchLR(btn_index);
+  Hud_DrawBox(dst, x, 5, 20 - x, 19, kSwitchLR_palettes[btn_index]);
+  static const uint16 kEquipmentLetterTiles[4][2] = {
+    {0x3CF0, 0x3CF1},  // Y
+    {0x2CF0, 0x2CF0 | 0x8000},  // X
+    {0x200E | 4 << 10, 0x200F | 4 << 10},  // L
+    {0x200C | 4 << 10, 0x200D | 4 << 10}   // R
+   };
 
   if (!kNewStyleInventory) {
-    if (palette == 3) {
-      dst[HUDXY(2, 6)] = 0x2CF0;
-      dst[HUDXY(2, 7)] = 0x2CF0 | 0x8000;
-    } else {
-      dst[HUDXY(2, 6)] = 0x3CF0;
-      dst[HUDXY(2, 7)] = 0x3CF1;
-    }
+    dst[HUDXY(2, 6)] = kEquipmentLetterTiles[btn_index][0];
+    dst[HUDXY(2, 7)] = kEquipmentLetterTiles[btn_index][1]; 
   }
   dst[HUDXY(x + 2, 5)] = 0x246E;
   dst[HUDXY(x + 3, 5)] = 0x246F;
@@ -1013,16 +1076,16 @@ void Hud_DrawProgressIcons_Pendants() {  // 8de9d3
     0xa8fb, 0xa8f9, 0xa8f9, 0xa8f9, 0xa8f9, 0xa8f9, 0xa8f9, 0xa8f9, 0xa8f9, 0xe8fb,
   };
   static const ItemBoxGfx kHudPendants0[2] = {
-    {0x313b, 0x313c, 0x313d, 0x313e},
-    {0x252b, 0x252c, 0x252d, 0x252e}
+    {{0x313b, 0x313c, 0x313d, 0x313e}},
+    {{0x252b, 0x252c, 0x252d, 0x252e}},
   };
   static const ItemBoxGfx kHudPendants1[2] = {
-    {0x313b, 0x313c, 0x313d, 0x313e},
-    {0x2d2b, 0x2d2c, 0x2d2d, 0x2d2e}
+    {{0x313b, 0x313c, 0x313d, 0x313e}},
+    {{0x2d2b, 0x2d2c, 0x2d2d, 0x2d2e}},
   };
   static const ItemBoxGfx kHudPendants2[2] = {
-    {0x313b, 0x313c, 0x313d, 0x313e},
-    {0x3d2b, 0x3d2c, 0x3d2d, 0x3d2e}
+    {{0x313b, 0x313c, 0x313d, 0x313e}},
+    {{0x3d2b, 0x3d2c, 0x3d2d, 0x3d2e}},
   };
   uint16 *dst = uvram_screen.row[0].col + (kNewStyleInventory ? HUDXY(22, 11) : HUDXY(21, 11));
   Hud_DrawNxN(dst, kProgressIconPendantsBg, 10, 9);
@@ -1139,20 +1202,18 @@ void Hud_DrawSelectedYButtonItem() {  // 8deb3a
 
   uint16 *dst_org = uvram_screen.row[0].col;
   uint16 *dst_box = dst_org + (kNewStyleInventory ? 1 : 0);
-
-  bool is_x = (joypad1L_last & 0x40 && (enhanced_features0 & kFeatures0_SwitchLR));
-  uint8 palette = is_x ? 3 : 7;
-  Hud_DrawBox(dst_box, 21, 5, 21 + 9, 10, palette);
+  
+  int btn_index = GetCurrentItemButtonIndex();
+  int item = *GetCurrentItemButtonPtr(btn_index);
+  Hud_DrawBox(dst_box, 21, 5, 21 + 9, 10, kSwitchLR_palettes[btn_index]);
 
   // Display either the current item or the item assigned
-  // to the x key.
-  int item = is_x ? hud_cur_item_x : hud_cur_item;
-
+  // to the x, l, or r key.
   if (item != 0) {
     uint16 *p = dst_org + kHudItemInVramPtr[Hud_GetItemPosition(item)];
     Hud_Copy2x2(dst_box + HUDXY(25, 6), p);
     if (timer_for_flashing_circle & 0x10)
-      Hud_DrawFlashingCircle(p, palette);
+      Hud_DrawFlashingCircle(p, kSwitchLR_palettes[btn_index]);
   }
 
   const uint16 *src_p;
@@ -1171,7 +1232,7 @@ void Hud_DrawSelectedYButtonItem() {  // 8deb3a
   } else if (item == kHudItem_Shovel) {
     src_p = &kHudItemText[(13 - 1) * 16];
   } else if (item == 0) {
-    src_p = is_x ? kNotAssignedItemText : &kHudItemText[(20 - 1) * 16];
+    src_p = btn_index ? kNotAssignedItemText : &kHudItemText[(20 - 1) * 16];
   } else {
     src_p = &kHudItemText[(item - 1) * 16];
   }
@@ -1195,10 +1256,10 @@ void Hud_DrawEquipmentBox() {  // 8ded29
   memcpy(dst + HUDXY(22, 26), &kHudEquipmentDungeonItemText[8], 8 * sizeof(uint16));
 
   static const ItemBoxGfx kHudItemHeartPieces[4] = {
-    {0x2484, 0x6484, 0x2485, 0x6485},
-    {0x24ad, 0x6484, 0x2485, 0x6485},
-    {0x24ad, 0x6484, 0x24ae, 0x6485},
-    {0x24ad, 0x64ad, 0x24ae, 0x6485},
+    {{0x2484, 0x6484, 0x2485, 0x6485}},
+    {{0x24ad, 0x6484, 0x2485, 0x6485}},
+    {{0x24ad, 0x6484, 0x24ae, 0x6485}},
+    {{0x24ad, 0x64ad, 0x24ae, 0x6485}},
   };
   if (cur_palace_index_x2 == 0xff) {
     for (int i = 0; i < 8; i++)
@@ -1210,14 +1271,14 @@ void Hud_DrawEquipmentBox() {  // 8ded29
   Hud_DrawItem(dst + HUDXY(28, 23), &kHudItemArmor[link_armor]);
 
   static const ItemBoxGfx kHudItemPalaceItem[2] = {
-    {0x28d6, 0x68d6, 0x28e6, 0x28e7},
-    {0x354b, 0x354c, 0x354d, 0x354e},
+    {{0x28d6, 0x68d6, 0x28e6, 0x28e7}},
+    {{0x354b, 0x354c, 0x354d, 0x354e}},
   };
   static const ItemBoxGfx kHudItemDungeonMap[1] = {
-    {0x28de, 0x28df, 0x28ee, 0x28ef},
+    {{0x28de, 0x28df, 0x28ee, 0x28ef}},
   };
   static const ItemBoxGfx kHudItemDungeonCompass[1] = {
-    {0x24bf, 0x64bf, 0x2ccf, 0x6ccf},
+    {{0x24bf, 0x64bf, 0x2ccf, 0x6ccf}},
   };
   if (cur_palace_index_x2 != 0xff &&
      (link_bigkey << (cur_palace_index_x2 >> 1)) & 0x8000) {
@@ -1445,25 +1506,31 @@ const uint16 *Hud_GetItemBoxPtr(int item) {
 void Hud_HandleItemSwitchInputs() {
   if (!(enhanced_features0 & kFeatures0_SwitchLR))
     return;
-  if (filtered_joypad_L & (0x20 | 0x10)) {  // left/right shoulder
-    int old_item = hud_cur_item;
-    for (int i = 0; ; i++) {
-      if (i >= kHudItemCount) {
-        hud_cur_item = 0;
-        break;
+  
+  bool direction;
+  
+  if (filtered_joypad_L & kJoypadL_L && (hud_cur_item_l == 0))
+    direction = (hud_cur_item_r != 0);
+  else if (filtered_joypad_L & kJoypadL_R && (hud_cur_item_r == 0))
+    direction = true;
+  else
+    return;
+
+  uint8 item = hud_cur_item;
+  for (int i = 0; i < kHudItemCount; i++) {
+    if (!direction)
+      Hud_GotoPrevItem(&item, 1);
+    else
+      Hud_GotoNextItem(&item, 1);
+    if (Hud_DoWeHaveThisItem(item) && (!(enhanced_features0 & kFeatures0_SwitchLRLimit) || Hud_GetItemPosition(item) <= 3)) {
+      if (item != hud_cur_item) {
+        hud_cur_item = item;
+        sound_effect_2 = 32;
+        Hud_UpdateEquippedItem();
+        Hud_UpdateItemBox();
+        flag_update_hud_in_nmi++;
       }
-      if (filtered_joypad_L & 0x20)
-        Hud_GotoPrevItem(&hud_cur_item, 1);
-      else
-        Hud_GotoNextItem(&hud_cur_item, 1);
-      if (Hud_DoWeHaveThisItem(hud_cur_item))
-        break;
-    }
-    if (hud_cur_item != old_item) {
-      sound_effect_2 = 32;
-      Hud_UpdateEquippedItem();
-      Hud_UpdateItemBox();
-      flag_update_hud_in_nmi++;
+      break;
     }
   }
 }

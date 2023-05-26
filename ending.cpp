@@ -138,19 +138,18 @@ void Intro_SetupScreen() {  // 828000
   TS_copy = 0;
   Intro_InitializeBackgroundSettings();
   CGWSEL_copy = 0x20;
-  zelda_ppu_write(OBSEL, 2);
   load_chr_halfslot_even_odd = 20;
   Graphics_LoadChrHalfSlot();
   load_chr_halfslot_even_odd = 0;
   LoadOWMusicIfNeeded();
 
-  zelda_ppu_write(VMAIN, 0x80);
-  zelda_ppu_write_word(VMADDL, 0x27f0);
-  int i = 16;
-  do {
-    zelda_ppu_write_word(VMDATAL, 0);
+  // why 17?
+  for(int i = 0; i < 17; i++)
     main_palette_buffer[144 + i] = 0x7fff;
-  } while (--i >= 0);
+
+  for (int i = 0; i < 17; i++)
+    g_zenv.vram[0x27f0 + i] = 0;
+
   R16 = 0x1ffe;
   R18 = 0x1bfe;
 }
@@ -247,11 +246,11 @@ void Credits_LoadScene_Dungeon() {  // 8286fd
   int i = submodule_index >> 1;
   sprite_graphics_index = kEnding_SpritePack[i];
   const DungPalInfo *dpi = GetDungPalInfo(kEnding_SpritePal[i] & 0x3f);
-  sprite_aux1_palette = dpi->pal2;
-  sprite_aux2_palette = dpi->pal3;
+  palette_sp5l = dpi->pal2;
+  palette_sp6l = dpi->pal3;
   misc_sprites_graphics_index = 10;
   InitializeTilesets();
-  palette_sp6 = 10;
+  palette_sp6r_indoors = 10;
   Dungeon_LoadPalettes();
   BGMODE_copy = 9;
   R16 = 0;
@@ -355,9 +354,7 @@ void Module19_TriforceRoom() {  // 829fec
     break;
   case 2:  //
     EnableForceBlank();
-    zelda_snes_dummy_write(NMITIMEN, 0);
     LoadCreditsSongs();
-    zelda_snes_dummy_write(NMITIMEN, 0x81);
     dungeon_room_index = 0x189;
     EraseTileMaps_normal();
     Palette_RevertTranslucencySwap();
@@ -488,14 +485,11 @@ void Module19_TriforceRoom() {  // 829fec
 }
 
 void Intro_InitializeBackgroundSettings() {  // 82c500
-  zelda_ppu_write(SETINI, 0);
   BGMODE_copy = 9;
   MOSAIC_copy = 0;
   zelda_ppu_write(BG1SC, 0x13);
   zelda_ppu_write(BG2SC, 3);
   zelda_ppu_write(BG3SC, 0x63);
-  zelda_ppu_write(BG12NBA, 0x22);
-  zelda_ppu_write(BG34NBA, 7);
   CGADSUB_copy = 32;
   COLDATA_copy0 = 32;
   COLDATA_copy1 = 64;
@@ -575,7 +569,6 @@ void Intro_Clear1kbBlocksOfWRAM() {  // 8cc1a0
 void Intro_InitializeMemory_darken() {  // 8cc1f5
   EnableForceBlank();
   EraseTileMaps_normal();
-  zelda_ppu_write(OBSEL, 2);
   main_tile_theme_index = 35;
   sprite_graphics_index = 125;
   aux_tile_theme_index = 81;
@@ -585,7 +578,7 @@ void Intro_InitializeMemory_darken() {  // 8cc1f5
   DecompressAnimatedDungeonTiles(0x5d);
   bg_tile_animation_countdown = 2;
   BYTE(overworld_screen_index) = 0;
-  dung_hdr_palette_1 = 0;
+  palette_main_indoors = 0;
   overworld_palette_aux3_bp7_lo = 0;
   R16 = 0;
   R18 = 0;
@@ -671,7 +664,7 @@ void FadeMusicAndResetSRAMMirror() {  // 8cc2f0
 
 void Intro_InitializeTriforcePolyThread() {  // 8cc33c
   misc_sprites_graphics_index = 8;
-  LoadCommonSprites_2();
+  LoadCommonSprites();
   Intro_InitGfx_Helper();
   intro_sprite_isinited[0] = 1;
   intro_sprite_isinited[1] = 1;
@@ -991,13 +984,7 @@ void AnimateSceneSprite_AddObjectsToOamBuffer(int k, const IntroSpriteEnt *src, 
   OamEnt *oam = (OamEnt *)&g_ram[intro_sprite_alloc];
   intro_sprite_alloc += num * 4;
   do {
-    uint16 xcur = x + src->x;
-    uint16 ycur = y + src->y;
-    oam->x = xcur;
-    oam->y = ClampYForOam(ycur);
-    oam->charnum = src->charnum;
-    oam->flags = src->flags;
-    bytewise_extended_oam[oam - oam_buf] = src->ext | (xcur >> 8 & 1);
+    SetOamHelper0(oam, x + src->x, y + src->y, src->charnum, src->flags, src->ext);
   } while (oam++, src++, --num);
 }
 
@@ -1014,7 +1001,7 @@ void AnimateSceneSprite_MoveTriangle(int k) {  // 8cc9f1
 
 void TriforceRoom_PrepGFXSlotForPoly() {  // 8cca54
   misc_sprites_graphics_index = 8;
-  LoadCommonSprites_2();
+  LoadCommonSprites();
   Intro_InitGfx_Helper();
   intro_sprite_isinited[0] = 1;
   intro_sprite_isinited[1] = 1;
@@ -1028,7 +1015,7 @@ void TriforceRoom_PrepGFXSlotForPoly() {  // 8cca54
 
 void Credits_InitializePolyhedral() {  // 8cca81
   misc_sprites_graphics_index = 8;
-  LoadCommonSprites_2();
+  LoadCommonSprites();
   Intro_InitGfx_Helper();
   poly_config1 = 0;
   intro_sprite_isinited[0] = 1;
@@ -1205,14 +1192,8 @@ void AnimateSceneSprite_CreditsTriangle(int k) {  // 8ccd3e
 void Intro_DisplayLogo() {  // 8ced82
   static const uint8 kIntroLogo_X[4] = { 0x60, 0x70, 0x80, 0x88 };
   static const uint8 kIntroLogo_Tile[4] = { 0x69, 0x6b, 0x6d, 0x6e };
-  OamEnt *oam = oam_buf;
-  for (int i = 0; i < 4; i++) {
-    oam[i].x = kIntroLogo_X[i];
-    oam[i].y = 0x68;
-    oam[i].charnum = kIntroLogo_Tile[i];
-    oam[i].flags = 0x32;
-    bytewise_extended_oam[i] = 2;
-  }
+  for (int i = 0; i < 4; i++)
+    SetOamPlain(&oam_buf[i], kIntroLogo_X[i], 0x68, kIntroLogo_Tile[i], 0x32, 2);
 }
 
 void Intro_SetupSwordAndIntroFlash() {  // 8cfe45
@@ -1230,7 +1211,7 @@ void Intro_PeriodicSwordAndIntroFlash() {  // 8cfe56
   SetBackdropcolorBlack();
   if (intro_times_pal_flash) {
     if ((intro_times_pal_flash & 3) != 0) {
-      (&COLDATA_copy0)[intro_sword_24] |= 0x1f;
+      (&COLDATA_copy0)[intro_sword_24] |= (enhanced_features0 & kFeatures0_DimFlashes) ? 0x05 : 0x1f;
       intro_sword_24 = (intro_sword_24 == 2) ? 0 : intro_sword_24 + 1;
     }
     intro_times_pal_flash--;
@@ -1240,12 +1221,8 @@ void Intro_PeriodicSwordAndIntroFlash() {  // 8cfe56
     static const uint8 kIntroSword_Char[10] = { 0, 2, 0x20, 0x22, 4, 6, 8, 0xa, 0xc, 0xe };
     static const uint8 kIntroSword_X[10] = { 0x40, 0x40, 0x30, 0x50, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     static const uint16 kIntroSword_Y[10] = { 0x10, 0x20, 0x28, 0x28, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 };
-    bytewise_extended_oam[0x52 + j] = 2;
-    oam[j].charnum = kIntroSword_Char[j];
-    oam[j].flags = 0x21;
-    oam[j].x = kIntroSword_X[j];
     uint16 y = intro_sword_ypos + kIntroSword_Y[j];
-    oam[j].y = ((y & 0xff00) ? 0xf8 : y) - 8;
+    SetOamPlain(&oam[j], kIntroSword_X[j], ((y & 0xff00) ? 0xf8 : y) - 8, kIntroSword_Char[j], 0x21, 2);
   }
 
   if (intro_sword_ypos != 30) {
@@ -1278,11 +1255,7 @@ void Intro_PeriodicSwordAndIntroFlash() {  // 8cfe56
       intro_sword_18 = kSwordSparkle_Tab[intro_sword_19];
     }
     static const uint8 kSwordSparkle_Char[7] = { 0x28, 0x37, 0x27, 0x36, 0x27, 0x37, 0x28 };
-    bytewise_extended_oam[0x50] = 0;
-    oam_buf[0x50].x = 0x44;
-    oam_buf[0x50].y = 0x43;
-    oam_buf[0x50].flags = 0x25;
-    oam_buf[0x50].charnum = kSwordSparkle_Char[intro_sword_19];
+    SetOamPlain(&oam_buf[0x50], 0x44, 0x43, kSwordSparkle_Char[intro_sword_19], 0x25, 0);
     break;
   }
   case 2: {
@@ -1290,16 +1263,9 @@ void Intro_PeriodicSwordAndIntroFlash() {  // 8cfe56
     int k = intro_sword_19;
     if (k >= 7)
       return;
-    bytewise_extended_oam[0x50] = 0;
-    bytewise_extended_oam[0x51] = 0;
-    oam_buf[0x51].x = oam_buf[0x50].x = 0x42;
-
     uint8 y = (intro_sword_21 < 0x50 ? intro_sword_21 : 0x4f) + intro_sword_ypos + 0x31;
-    oam_buf[0x50].y = y;
-    oam_buf[0x51].y = y + 8;
-    oam_buf[0x50].charnum = kIntroSwordSparkle_Char[k];
-    oam_buf[0x51].charnum = kIntroSwordSparkle_Char[k + 1];
-    oam_buf[0x51].flags = oam_buf[0x50].flags = 0x23;
+    SetOamPlain(&oam_buf[0x50], 0x42, y + 0, kIntroSwordSparkle_Char[k + 0], 0x23, 0);
+    SetOamPlain(&oam_buf[0x51], 0x42, y + 8, kIntroSwordSparkle_Char[k + 1], 0x23, 0);
     if (intro_sword_18 == 0) {
       intro_sword_21 += 4;
       if (intro_sword_21 == 0x4 || intro_sword_21 == 0x48 || intro_sword_21 == 0x4c || intro_sword_21 == 0x58)
@@ -2670,14 +2636,10 @@ void Credits_FadeInTheEnd() {  // 8ec3d5
 }
 
 void Credits_HangForever() {  // 8ec41a
-  static const OamEntSigned kEndSequence37_Oams[4] = {
-    {-96, -72, 0x00, 0x3b},
-    {-80, -72, 0x02, 0x3b},
-    {-64, -72, 0x04, 0x3b},
-    {-48, -72, 0x06, 0x3b},
-  };
-  memcpy(oam_buf, kEndSequence37_Oams, 4 * 4);
-  bytewise_extended_oam[0] = bytewise_extended_oam[1] = bytewise_extended_oam[2] = bytewise_extended_oam[3] = 2;
+  SetOamPlain(&oam_buf[0], -96, -72, 0x00, 0x3b, 2);
+  SetOamPlain(&oam_buf[1], -80, -72, 0x02, 0x3b, 2);
+  SetOamPlain(&oam_buf[2], -64, -72, 0x04, 0x3b, 2);
+  SetOamPlain(&oam_buf[3], -48, -72, 0x06, 0x3b, 2);
 }
 
 void CrystalCutscene_InitializePolyhedral() {  // 9ecdd9

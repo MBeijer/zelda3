@@ -2052,13 +2052,14 @@ void RoomBounds_SubA(RoomBounds *r) {
 }
 
 void Dungeon_StartInterRoomTrans_Left() {
+  assert(submodule_index == 0);
   link_quadrant_x ^= 1;
   Dungeon_AdjustQuadrant();
   RoomBounds_SubA(&room_bounds_x);
   Dung_SaveDataForCurrentRoom();
   DungeonTransition_AdjustCamera_X(link_quadrant_x ^ 1);
   HandleEdgeTransition_AdjustCameraBoundaries(3);
-  submodule_index++;
+  submodule_index = 1;
   if (link_quadrant_x) {
     RoomBounds_SubB(&room_bounds_x);
     BYTE(dungeon_room_index_prev) = dungeon_room_index;
@@ -2072,7 +2073,7 @@ void Dungeon_StartInterRoomTrans_Left() {
       }
       dungeon_room_index--;
     }
-    submodule_index += 1;
+    submodule_index = 2;
     if (room_transitioning_flags & 1) {
       link_is_on_lower_level ^= 1;
       link_is_on_lower_level_mirror = link_is_on_lower_level;
@@ -2091,13 +2092,14 @@ void Dung_StartInterRoomTrans_Left_Plus() {
 }
 
 void Dungeon_StartInterRoomTrans_Up() {
+  assert(submodule_index == 0);
   link_quadrant_y ^= 2;
   Dungeon_AdjustQuadrant();
   RoomBounds_SubA(&room_bounds_y);
   Dung_SaveDataForCurrentRoom();
   DungeonTransition_AdjustCamera_Y(link_quadrant_y ^ 2);
   HandleEdgeTransition_AdjustCameraBoundaries(1);
-  submodule_index++;
+  submodule_index = 1;
   if (link_quadrant_y) {
     RoomBounds_SubB(&room_bounds_y);
     BYTE(dungeon_room_index_prev) = dungeon_room_index;
@@ -2119,7 +2121,7 @@ void Dungeon_StartInterRoomTrans_Up() {
       Dungeon_AdjustAfterSpiralStairs();
     }
     BYTE(dungeon_room_index) -= 0x10;
-    submodule_index += 1;
+    submodule_index = 2;
     if (room_transitioning_flags & 1) {
       link_is_on_lower_level ^= 1;
       link_is_on_lower_level_mirror = link_is_on_lower_level;
@@ -2133,13 +2135,14 @@ void Dungeon_StartInterRoomTrans_Up() {
 }
 
 void Dungeon_StartInterRoomTrans_Down() {
+  assert(submodule_index == 0);
   link_quadrant_y ^= 2;
   Dungeon_AdjustQuadrant();
   RoomBounds_AddA(&room_bounds_y);
   Dung_SaveDataForCurrentRoom();
   DungeonTransition_AdjustCamera_Y(link_quadrant_y);
   HandleEdgeTransition_AdjustCameraBoundaries(0);
-  submodule_index++;
+  submodule_index = 1;
   if (!link_quadrant_y) {
     RoomBounds_AddB(&room_bounds_y);
     BYTE(dungeon_room_index_prev) = dungeon_room_index;
@@ -2153,7 +2156,7 @@ void Dungeon_StartInterRoomTrans_Down() {
       Dungeon_AdjustAfterSpiralStairs();
     }
     BYTE(dungeon_room_index) += 16;
-    submodule_index += 1;
+    submodule_index = 2;
     if (room_transitioning_flags & 1) {
       link_is_on_lower_level ^= 1;
       link_is_on_lower_level_mirror = link_is_on_lower_level;
@@ -2376,10 +2379,6 @@ const DungPalInfo *GetDungPalInfo(int idx) {
 
 uint16 Dungeon_GetTeleMsg(int room) {
   return kDungeonRoomTeleMsg[room];
-}
-
-uint8 GetEntranceMusicTrack(int entrance) {
-  return kEntranceData_musicTrack[entrance];
 }
 
 bool Dungeon_IsPitThatHurtsPlayer() {
@@ -3699,10 +3698,10 @@ void Dungeon_LoadHeader() {  // 81b564
   dung_want_lights_out_copy = dung_want_lights_out;
   dung_want_lights_out = hdr_ptr[0] & 1;
   const DungPalInfo *dpi = &kDungPalinfos[hdr_ptr[1]];
-  dung_hdr_palette_1 = dpi->pal0;
-  overworld_palette_sp0 = dpi->pal1;
-  sprite_aux1_palette = dpi->pal2;
-  sprite_aux2_palette = dpi->pal3;
+  palette_main_indoors = dpi->pal0;
+  palette_sp0l = dpi->pal1;
+  palette_sp5l = dpi->pal2;
+  palette_sp6l = dpi->pal3;
   aux_tile_theme_index = hdr_ptr[2];
   sprite_graphics_index = hdr_ptr[3] + 0x40;
   dung_hdr_collision_2 = hdr_ptr[4];
@@ -4281,6 +4280,14 @@ void Dungeon_FlipCrystalPegAttribute() {  // 81c22a
 void Dungeon_HandleRoomTags() {  // 81c2fd
   if (!flag_skip_call_tag_routines) {
     Dungeon_DetectStaircase();
+
+    // Dungeon_DetectStaircase might change the submodule, so avoid
+    // calling the tag routines cause they could also change the submodule,
+    // causing items to spawn in incorrect locations cause link_x/y_coord gets
+    // out of sync if you enter a staircase exactly when a room tag triggers.
+    if (enhanced_features0 & kFeatures0_MiscBugFixes && submodule_index != 0)
+      return;
+
     g_ram[14] = 0;
     kDungTagroutines[dung_hdr_tag[0]](0);
     g_ram[14] = 1;
@@ -5915,7 +5922,6 @@ uint16 RoomTag_BuildChestStripes(uint16 pos, uint16 y) {  // 81ef0f
 void Dungeon_SetAttrForActivatedWaterOff() {  // 81ef93
   CGWSEL_copy = 2;
   CGADSUB_copy = 0x32;
-  zelda_ppu_write(TS, 0);
   TS_copy = 0;
   W12SEL_copy = 0;
   dung_hdr_collision = 0;
@@ -6422,7 +6428,7 @@ void Module_PreDungeon() {  // 82821e
   Dungeon_LoadAttributeTable();
   misc_sprites_graphics_index = 10;
   InitializeTilesets();
-  palette_sp6 = 10;
+  palette_sp6r_indoors = 10;
   Dungeon_LoadPalettes();
   if (link_is_bunny_mirror | link_is_bunny)
     LoadGearPalettes_bunny();
@@ -6491,11 +6497,8 @@ void Module_PreDungeon_setAmbientSfx() {  // 82838c
 void LoadOWMusicIfNeeded() {  // 82854c
   if (!flag_which_music_type)
     return;
-  zelda_snes_dummy_write(NMITIMEN, 0);
-  zelda_snes_dummy_write(HDMAEN, 0);
   flag_which_music_type = 0;
   LoadOverworldSongs();
-  zelda_snes_dummy_write(NMITIMEN, 0x81);
 }
 
 void Module07_Dungeon() {  // 8287a2
@@ -6910,7 +6913,7 @@ table:
 }
 
 void Module07_0E_01_HandleMusicAndResetProps() {  // 828c78
-  if ((dungeon_room_index == 7 || dungeon_room_index == 23 && music_unk1 != 17) && !(link_which_pendants & 1))
+  if ((dungeon_room_index == 7 || dungeon_room_index == 23 && !ZeldaIsPlayingMusicTrack(17)) && !(link_which_pendants & 1))
     music_control = 0xf1;
   staircase_var1 = (which_staircase_index & 4) ? 106 : 88;
   overworld_map_state = 0;
@@ -7344,7 +7347,7 @@ void Dungeon_SetBossMusicUnorthodox() {  // 829165
     x = 0x15;
     if (dungeon_room_index != 7) {
       x = 0x11;
-      if (dungeon_room_index != 23 || music_unk1 == 17)
+      if (dungeon_room_index != 23 || ZeldaIsPlayingMusicTrack(17))
         return;
     }
     if (music_unk1 != 0xf1 && (link_which_pendants & 1))
@@ -7460,8 +7463,8 @@ void Module07_0F_01_OperateSpotlight() {  // 829334
     TMW_copy = 0;
     TSW_copy = 0;
     subsubmodule_index = 0;
-    if (buffer_for_playing_songs != 0xff)
-      music_control = buffer_for_playing_songs;
+    if (queued_music_control != 0xff)
+      music_control = queued_music_control;
   }
 }
 
@@ -7736,7 +7739,7 @@ void Module07_19_MirrorFade() {  // 8298f7
     submodule_index = 0;
     nmi_load_bg_from_vram = 0;
     last_music_control = music_unk1;
-    if (overworld_palette_swap_flag)
+    if (palette_swap_flag)
       Palette_RevertTranslucencySwap();
   }
 }
@@ -7817,7 +7820,7 @@ void Module11_DungeonFallingEntrance() {  // 829af9
     flag_skip_call_tag_routines++;
     Dungeon_PlayBlipAndCacheQuadrantVisits();
     ResetThenCacheRoomEntryProperties();
-    music_control = buffer_for_playing_songs;
+    music_control = queued_music_control;
     last_music_control = music_unk1;
     break;
   }
@@ -7853,9 +7856,8 @@ void Module11_02_LoadEntrance() {  // 829b1c
   Dungeon_LoadAttributeTable();
   subsubmodule_index = bak + 1;
   misc_sprites_graphics_index = 10;
-  zelda_ppu_write(OBSEL, 2);
   InitializeTilesets();
-  palette_sp6 = 10;
+  palette_sp6r_indoors = 10;
   Dungeon_LoadPalettes();
   Hud_RestoreTorchBackground();
   button_mask_b_y = 0;
@@ -7871,19 +7873,16 @@ void Module11_02_LoadEntrance() {  // 829b1c
 }
 
 void Dungeon_LoadSongBankIfNeeded() {  // 829bd7
-  if (buffer_for_playing_songs == 0xff || buffer_for_playing_songs == 0xf2)
+  if (queued_music_control == 0xff || queued_music_control == 0xf2)
     return;
 
-  if (buffer_for_playing_songs == 3 || buffer_for_playing_songs == 7 || buffer_for_playing_songs == 14) {
+  if (queued_music_control == 3 || queued_music_control == 7 || queued_music_control == 14) {
     LoadOWMusicIfNeeded();
   } else {
     if (flag_which_music_type)
       return;
-    zelda_snes_dummy_write(NMITIMEN, 0);
-    zelda_snes_dummy_write(HDMAEN, 0);
     flag_which_music_type = 1;
     LoadDungeonSongs();
-    zelda_snes_dummy_write(NMITIMEN, 0x81);
   }
 }
 
@@ -7966,13 +7965,14 @@ void HandleEdgeTransitionMovementEast_RightBy8() {  // 82b62e
 }
 
 void Dungeon_StartInterRoomTrans_Right() {  // 82b63a
+  assert(submodule_index == 0);
   link_quadrant_x ^= 1;
   Dungeon_AdjustQuadrant();
   RoomBounds_AddA(&room_bounds_x);
   Dung_SaveDataForCurrentRoom();
   DungeonTransition_AdjustCamera_X(link_quadrant_x);
   HandleEdgeTransition_AdjustCameraBoundaries(2);
-  submodule_index++;
+  submodule_index = 1;
   if (!link_quadrant_x) {
     RoomBounds_AddB(&room_bounds_x);
     BYTE(dungeon_room_index_prev) = dungeon_room_index;
@@ -7986,7 +7986,7 @@ void Dungeon_StartInterRoomTrans_Right() {  // 82b63a
       }
       dungeon_room_index += 1;
     }
-    submodule_index += 1;
+    submodule_index = 2;
     if (room_transitioning_flags & 1) {
       link_is_on_lower_level ^= 1;
       link_is_on_lower_level_mirror = link_is_on_lower_level;
@@ -8273,7 +8273,6 @@ uint8 CalculateTransitionLanding() {  // 82c1e5
 // This gets called when entering a dungeon from ow.
 void Dungeon_LoadAndDrawRoom() {  // 82c57b
   int bak = HDMAEN_copy;
-  zelda_snes_dummy_write(HDMAEN, 0);
   HDMAEN_copy = 0;
   Dungeon_LoadRoom();
   overworld_screen_transition = 0;
@@ -8365,9 +8364,9 @@ void Dungeon_LoadEntrance() {  // 82d8b3
     link_quadrant_x = kStartingPoint_quadrant2[i] >> 4;
     link_quadrant_y = kStartingPoint_quadrant2[i] & 0xf;
 
-    buffer_for_playing_songs = kStartingPoint_musicTrack[i];
+    queued_music_control = kStartingPoint_musicTrack[i];
     if (i == 0 && sram_progress_indicator == 0)
-      buffer_for_playing_songs = 0xff;
+      queued_music_control = 0xff;
     death_var4 = 0;
   } else {
     int i = which_entrance;
@@ -8402,9 +8401,9 @@ void Dungeon_LoadEntrance() {  // 82d8b3
 
     link_direction_facing = (i == 0 || i == 0x43) ? 2 : 0;
     main_tile_theme_index = kEntranceData_blockset[i];
-    buffer_for_playing_songs = kEntranceData_musicTrack[i];
-    if (buffer_for_playing_songs == 3 && sram_progress_indicator >= 2)
-      buffer_for_playing_songs = 18;
+    queued_music_control = ZeldaGetEntranceMusicTrack(i);
+    if (queued_music_control == 3 && sram_progress_indicator >= 2)
+      queued_music_control = 18;
 
     dung_cur_floor = kEntranceData_floor[i];
     BYTE(cur_palace_index_x2) = kEntranceData_palace[i];
@@ -8600,7 +8599,7 @@ void HandleLinkOnSpiralStairs() {  // 87f2c1
       link_actual_vel_x = 2;
     }
   }
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
   Link_HandleMovingAnimation_StartWithDash();
   if (!link_timer_push_get_tired && sign8(--countdown_timer_for_staircases)) {
     countdown_timer_for_staircases = 0;
@@ -8639,7 +8638,7 @@ void SpiralStairs_FindLandingSpot() {  // 87f391
     link_actual_vel_x = -4, link_actual_vel_y = 2;
   if (some_animation_timer_steps == 2)
     link_actual_vel_x = 0, link_actual_vel_y = 16;
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
   Link_HandleMovingAnimation_StartWithDash();
   if ((uint8)link_x_coord == (uint8)tiledetect_which_y_pos[1])
     some_animation_timer_steps = 2;

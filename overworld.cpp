@@ -445,7 +445,7 @@ void PreOverworld_LoadProperties() {  // 8283c7
     if (dr != 0 && dr != 0xe1) {
 dark:
       xt = 0xf3;
-      if (buffer_for_playing_songs == 0xf2)
+      if (queued_music_control == 0xf2)
         goto setsong;
       xt = sram_progress_indicator < 2 ? 3 : 2;
     }
@@ -456,7 +456,7 @@ dark:
       xt = 4;
   }
 setsong:
-  buffer_for_playing_songs = xt;
+  queued_music_control = xt;
   DecompressAnimatedOverworldTiles(ow_anim_tiles);
   InitializeTilesets();
   OverworldLoadScreensPaletteSet();
@@ -605,11 +605,11 @@ void Dungeon_PrepExitWithSpotlight() {  // 8299ca
     Ancilla_TerminateWaterfallSplashes();
     link_y_coord_exit = link_y_coord;
   }
-  uint8 m = GetEntranceMusicTrack(which_entrance);
+  uint8 m = ZeldaGetEntranceMusicTrack(which_entrance);
   if (m != 3 || (m = sram_progress_indicator) >= 2) {
-    if (m != 0xf2)
-      m = 0xf1;
-    else if (music_unk1 == 0xc)
+    if (m != 0xf2)  // fade to 0x40
+      m = 0xf1;  // fade to zero
+    else if (music_unk1 == 12)
       m = 7;
     music_control = m;
   }
@@ -813,21 +813,21 @@ after:
   y >>= 1;
   Dungeon_ResetTorchBackgroundAndPlayerInner();
   map16_load_src_off &= kSwitchAreaTab0[y];
-  uint16 pushed = current_area_of_player + kSwitchAreaTab3[y];
-  map16_load_src_off += kSwitchAreaTab1[(y * 128 | pushed) >> 1];
+  int pushed = ((current_area_of_player + kSwitchAreaTab3[y]) >> 1) & 0x3f;
+  map16_load_src_off += kSwitchAreaTab1[y * 64 + pushed];
 
   uint8 old_screen = overworld_screen_index;
   if (old_screen == 0x2a)
     sound_effect_ambient = 0x80;
 
-  uint8 new_area = kOverworldAreaHeads[pushed >> 1] | savegame_is_darkworld;
+  uint8 new_area = kOverworldAreaHeads[pushed] | savegame_is_darkworld;
   BYTE(overworld_screen_index) = new_area;
   BYTE(overworld_area_index) = new_area;
   if (!savegame_is_darkworld || link_item_moon_pearl) {
     uint8 music = overworld_music[new_area];
     if ((music & 0xf0) == 0)
       sound_effect_ambient = 5;
-    if ((music & 0xf) != music_unk1)
+    if (!ZeldaIsPlayingMusicTrack(music & 0xf))
       music_control = 0xf1;
   }
   Overworld_LoadGFXAndScreenSize();
@@ -1055,7 +1055,7 @@ void Overworld_StartMosaicTransition() {  // 82ae5e
   switch (subsubmodule_index) {
   case 0:
     if (BYTE(overworld_screen_index) != 0x80) {
-      if ((overworld_music[BYTE(overworld_screen_index)] & 0xf) != music_unk1)
+      if (!ZeldaIsPlayingMusicTrack(overworld_music[BYTE(overworld_screen_index)] & 0xf))
         music_control = 0xf1;
     }
     ResetTransitionPropsAndAdvance_ResetInterface();
@@ -1202,7 +1202,7 @@ void Module09_FadeBackInFromMosaic() {  // 82b0d2
     if (BYTE(overworld_screen_index) != 0x80 && BYTE(overworld_screen_index) != 0x2a) {
       uint8 m = overworld_music[BYTE(overworld_screen_index)];
       sound_effect_ambient = (m >> 4) ? (m >> 4) : 5;
-      if ((m & 0xf) != music_unk1)
+      if (!ZeldaIsPlayingMusicTrack(m & 0xf))
         music_control = (m & 0xf);
     }
     submodule_index = 8;
@@ -1449,7 +1449,7 @@ void Module09_2E_Whirlpool() {  // 82b40f
     overworld_palette_aux_or_main = 0;
     Palette_Load_SpriteMain();
     Palette_Load_SpriteEnvironment();
-    Palette_Load_SpritePal0Left();
+    Palette_Load_Sp0L();
     Palette_Load_HUD();
     Palette_Load_OWBGMain();
     uint8 sc = overworld_screen_index;
@@ -1506,14 +1506,16 @@ void Module09_2A_00_ScrollToLand() {  // 82b532
   uint16 x = link_x_coord, xd = 0;
   if (x != link_x_coord_cached) {
     int16 d = (x > link_x_coord_cached) ? -1 : 1;
-    ((x += d) != link_x_coord_cached) && (x += d);
+    if ((x += d) != link_x_coord_cached)
+      x += d;
     xd = x - link_x_coord;
     link_x_coord = x;
   }
   uint16 y = link_y_coord, yd = 0;
   if (y != link_y_coord_cached) {
     int16 d = (y > link_y_coord_cached) ? -1 : 1;
-    ((y += d) != link_y_coord_cached) && (y += d);
+    if ((y += d) != link_y_coord_cached)
+      y += d;
     yd = y - link_y_coord;
     link_y_coord = y;
   }
@@ -2447,23 +2449,20 @@ void Overworld_DecompressAndDrawAllQuadrants() {  // 82f54a
 }
 
 static const uint8 *GetOverworldHibytes(int i) {
-  return kOverworld_Hibytes_Comp + *(uint32 *)(kOverworld_Hibytes_Comp + i * 4);
+  return kOverworld_Hibytes_Comp(i).ptr;
 }
 
 static const uint8 *GetOverworldLobytes(int i) {
-  return kOverworld_Lobytes_Comp + *(uint32 *)(kOverworld_Lobytes_Comp + i * 4);
+  return kOverworld_Lobytes_Comp(i).ptr;
 }
 
 
 void Overworld_DecompressAndDrawOneQuadrant(uint16 *dst, int screen) {  // 82f595
-  int rv;
-
-
-  rv = Decompress_bank02(&g_ram[0x14400], GetOverworldHibytes(screen));
+  Decompress_bank02(&g_ram[0x14400], GetOverworldHibytes(screen));
   for (int i = 0; i < 256; i++)
     g_ram[0x14001 + i * 2] = g_ram[0x14400 + i];
 
-  rv = Decompress_bank02(&g_ram[0x14400], GetOverworldLobytes(screen));
+  Decompress_bank02(&g_ram[0x14400], GetOverworldLobytes(screen));
   for (int i = 0; i < 256; i++)
     g_ram[0x14000 + i * 2] = g_ram[0x14400 + i];
 

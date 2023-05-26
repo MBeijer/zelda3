@@ -17,6 +17,8 @@
 #include "nmi.h"
 #include "assets.h"
 
+static void WorldMap_AddSprite(int spr, uint8 big, uint8 flags, uint8 ch, uint16 x, uint16 y);
+static bool WorldMap_CalculateOamCoordinates(Point16U *pt);
 
 static const int8 kDungMap_Tab0[14] = {-1, -1, -1, -1, -1, 2, 0, 10, 4, 8, -1, 6, 12, 14};
 static const uint16 kDungMap_Tab1[8] = {0x2108, 0x2109, 0x2109, 0x210a, 0x210b, 0x210c, 0x210d, 0x211d};
@@ -61,7 +63,6 @@ static const uint16 kDungMap_Tab23[744] = {
   0x13a4, 0xb00, 0x138e, 0xb00, 0xb00, 0x5393, 0xb00, 0x574e, 0x4b7d, 0xb00, 0x8b7d, 0x139f, 0x97aa, 0x13a4, 0x13a9, 0x53a9, 0x13a5, 0x13a6, 0x93a5, 0xd3a5, 0xd38e, 0x938e, 0x13a4, 0x13aa, 0xb00, 0x13a6, 0xb00, 0x8b5f, 0x139b, 0x13a6, 0x139c, 0x53a2,
   0xb00, 0xb00, 0x138c, 0xb00, 0x9394, 0x139e, 0xb00, 0xb00,
 };
-static const uint16 kDungMap_Ptrs27[14] = {0xfc00, 0xfc08, 0xfc15, 0xfc21, 0xfc2b, 0xfc32, 0xfc3f, 0xfc4d, 0xfc5f, 0xfc68, 0xfc7d, 0xfc83, 0xfc8f, 0xfca0};
 static const uint16 kDungMap_Tab21[3] = {137, 167, 79};
 static const uint16 kDungMap_Tab22[3] = {169, 119, 190};
 static const uint16 kDungMap_Tab24[2] = {0x1f, 0x7f};
@@ -100,108 +101,6 @@ static PlayerHandlerFunc *const kDungMapSubmodules[] = {
 };
 static const uint16 kText_Positions[2] = {0x6125, 0x6244};
 static const uint16 kSrmOffsets[4] = {0, 0x500, 0xa00, 0xf00};
-static const uint8 kTextDictionary[] = {
-  0x59, 0x59, 0x59, 0x59,
-  0x59, 0x59, 0x59,
-  0x59, 0x59,
-  0x51, 0x2c, 0x59,
-  0x1a, 0x27, 0x1d, 0x59,
-  0x1a, 0x2b, 0x1e, 0x59,
-  0x1a, 0x25, 0x25, 0x59,
-  0x1a, 0x22, 0x27,
-  0x1a, 0x27, 0x1d,
-  0x1a, 0x2d, 0x59,
-  0x1a, 0x2c, 0x2d,
-  0x1a, 0x27,
-  0x1a, 0x2d,
-  0x1b, 0x25, 0x1e,
-  0x1b, 0x1a,
-  0x1b, 0x1e,
-  0x1b, 0x28,
-  0x1c, 0x1a, 0x27, 0x59,
-  0x1c, 0x21, 0x1e,
-  0x1c, 0x28, 0x26,
-  0x1c, 0x24,
-  0x1d, 0x1e, 0x2c,
-  0x1d, 0x22,
-  0x1d, 0x28,
-  0x1e, 0x27, 0x59,
-  0x1e, 0x2b, 0x59,
-  0x1e, 0x1a, 0x2b,
-  0x1e, 0x27, 0x2d,
-  0x1e, 0x1d, 0x59,
-  0x1e, 0x27,
-  0x1e, 0x2b,
-  0x1e, 0x2f,
-  0x1f, 0x28, 0x2b,
-  0x1f, 0x2b, 0x28,
-  0x20, 0x22, 0x2f, 0x1e, 0x59,
-  0x20, 0x1e, 0x2d,
-  0x20, 0x28,
-  0x21, 0x1a, 0x2f, 0x1e,
-  0x21, 0x1a, 0x2c,
-  0x21, 0x1e, 0x2b,
-  0x21, 0x22,
-  0x21, 0x1a,
-  0x22, 0x20, 0x21, 0x2d, 0x59,
-  0x22, 0x27, 0x20, 0x59,
-  0x22, 0x27,
-  0x22, 0x2c,
-  0x22, 0x2d,
-  0x23, 0x2e, 0x2c, 0x2d,
-  0x24, 0x27, 0x28, 0x30,
-  0x25, 0x32, 0x59,
-  0x25, 0x1a,
-  0x25, 0x28,
-  0x26, 0x1a, 0x27,
-  0x26, 0x1a,
-  0x26, 0x1e,
-  0x26, 0x2e,
-  0x27, 0x51, 0x2d, 0x59,
-  0x27, 0x28, 0x27,
-  0x27, 0x28, 0x2d,
-  0x28, 0x29, 0x1e, 0x27,
-  0x28, 0x2e, 0x27, 0x1d,
-  0x28, 0x2e, 0x2d, 0x59,
-  0x28, 0x1f,
-  0x28, 0x27,
-  0x28, 0x2b,
-  0x29, 0x1e, 0x2b,
-  0x29, 0x25, 0x1e,
-  0x29, 0x28, 0x30,
-  0x29, 0x2b, 0x28,
-  0x2b, 0x1e, 0x59,
-  0x2b, 0x1e,
-  0x2c, 0x28, 0x26, 0x1e,
-  0x2c, 0x1e,
-  0x2c, 0x21,
-  0x2c, 0x28,
-  0x2c, 0x2d,
-  0x2d, 0x1e, 0x2b, 0x59,
-  0x2d, 0x21, 0x22, 0x27,
-  0x2d, 0x1e, 0x2b,
-  0x2d, 0x21, 0x1a,
-  0x2d, 0x21, 0x1e,
-  0x2d, 0x21, 0x22,
-  0x2d, 0x28,
-  0x2d, 0x2b,
-  0x2e, 0x29,
-  0x2f, 0x1e, 0x2b,
-  0x30, 0x22, 0x2d, 0x21,
-  0x30, 0x1a,
-  0x30, 0x1e,
-  0x30, 0x21,
-  0x30, 0x22,
-  0x32, 0x28, 0x2e,
-  0x7, 0x1e, 0x2b,
-  0x13, 0x21, 0x1a,
-  0x13, 0x21, 0x1e,
-  0x13, 0x21, 0x22,
-  0x18, 0x28, 0x2e,
-};
-static const uint16 kTextDictionary_Idx[] = {
-  0, 4, 7, 9, 12, 16, 20, 24, 27, 30, 33, 36, 38, 40, 43, 45, 47, 49, 53, 56, 59, 61, 64, 66, 68, 71, 74, 77, 80, 83, 85, 87, 89, 92, 95, 100, 103, 105, 109, 112, 115, 117, 119, 124, 128, 130, 132, 134, 138, 142, 145, 147, 149, 152, 154, 156, 158, 162, 165, 168, 172, 176, 180, 182, 184, 186, 189, 192, 195, 198, 201, 203, 207, 209, 211, 213, 215, 219, 223, 226, 229, 232, 235, 237, 239, 241, 244, 248, 250, 252, 254, 256, 259, 262, 265, 268, 271, 274
-};
 static const int8 kText_InitializationData[32] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x39, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1c, 4, 0, 0, 0, 0, 0};
 static const uint16 kText_BorderTiles[9] = {0x28f3, 0x28f4, 0x68f3, 0x28c8, 0x387f, 0x68c8, 0xa8f3, 0xa8f4, 0xe8f3};
 static const uint8 kText_CommandLengths[25] = {
@@ -211,16 +110,7 @@ static const uint8 kText_CommandLengths[25] = {
 static const uint8 kVWF_RenderCharacter_setMasks[8] = {0x80, 0x40, 0x20, 0x10, 8, 4, 2, 1};
 static const uint16 kVWF_RenderCharacter_renderPos[3] = {0, 0x2a0, 0x540};
 static const uint16 kVWF_RenderCharacter_linePositions[3] = {0, 0x40, 0x80};
-static const uint8 kVWF_RenderCharacter_widths[99] = {
-  6, 6, 6, 6, 6, 6, 6, 6, 3, 6, 6, 6, 7, 6, 6, 6, 6, 6, 6, 7, 6, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 6,
-  6, 6, 3, 5, 6, 3, 7, 6, 6, 6, 6, 5, 6, 6, 6, 7, 7, 7, 7, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6, 6, 3, 7,
-  6, 4, 4, 6, 8, 6, 6, 6, 6, 6, 8, 8, 8, 7, 7, 7, 7, 4, 8, 8, 8, 8, 8, 8, 8, 4, 8, 8, 8, 8, 8, 8,
-  8, 8, 4,
-};
 static const uint16 kVWF_RowPositions[3] = {0, 2, 4};
-static const uint16 kVWF_LinePositions[3] = {0, 40, 80};
-static const uint16 kVWF_Command7B[4] = {0x24b8, 0x24ba, 0x24bc, 0x24be};
-static const uint16 kVWF_Command7C[8] = {0x24b8, 0x24ba, 0x24bc, 0x24be, 0x24b8, 0x24ba, 0x24bc, 0x24be};
 static const uint16 kText_WaitDurations[16] = {31, 63, 94, 125, 156, 188, 219, 250, 281, 313, 344, 375, 406, 438, 469, 500};
 static PlayerHandlerFunc *const kText_Render[] = {
   &RenderText_Draw_Border,
@@ -335,11 +225,11 @@ static PlayerHandlerFunc *const kModule_Death[16] = {
 static const uint8 kLocationMenuStartPos[3] = {0, 1, 6};
 static void RunInterface();
 const uint8 *GetDungmapFloorLayout() {
-  return kDungMap_FloorLayout + *(uint32 *)(kDungMap_FloorLayout + (cur_palace_index_x2 >> 1) * 4);
+  return kDungMap_FloorLayout(cur_palace_index_x2 >> 1).ptr;
 }
 
 uint8 GetOtherDungmapInfo(int count) {
-  const uint8 *p = kDungMap_Tiles + *(uint32 *)(kDungMap_Tiles + (cur_palace_index_x2 >> 1) * 4);
+  const uint8 *p = kDungMap_Tiles(cur_palace_index_x2 >> 1).ptr;
   return p[count];
 }
 
@@ -348,10 +238,6 @@ void DungMap_4() {
   dungmap_var5 -= dungmap_var4;
   if (!--bottle_menu_expand_row)
     overworld_map_state--;
-}
-
-const uint8 *GetCurrentTextPtr() {
-  return kDialogueText + kDialogueOffs[dialogue_message_index];
 }
 
 void Module_Messaging_6() {
@@ -726,7 +612,7 @@ void Death_Func1() {  // 89f2a4
   music_control = 241;
   sound_effect_ambient = 5;
   overworld_map_state = 5;
-  byte_7E03F3 = 0;
+  link_on_conveyor_belt = 0;
   byte_7E0322 = 0;
   link_cape_mode = 0;
   mapbak_bg1_x_offset = palette_filter_countdown;
@@ -829,7 +715,7 @@ void Death_Func6() {  // 89f458
   load_chr_halfslot_even_odd = 15;
   Graphics_LoadChrHalfSlot();
   load_chr_halfslot_even_odd = 0;
-  palette_sp6 = 5;
+  palette_sp6r_indoors = 5;
   overworld_palette_aux_or_main = 0x200;
   Palette_Load_SpriteEnvironment_Dungeon();
   Palette_Load_SpriteMain();
@@ -920,7 +806,7 @@ void Death_Func15(bool count_as_death) {  // 89f50f
     if (follower_indicator != 1 && BYTE(cur_palace_index_x2) != 255) {
       death_var4 = 0;
     } else {
-      buffer_for_playing_songs = 0;
+      queued_music_control = 0;
       player_is_indoors = 0;
     outdoors:
       if (savegame_is_darkworld)
@@ -948,9 +834,7 @@ void Death_Func15(bool count_as_death) {  // 89f50f
     Death_Func31();
     death_var4 = 0;
     death_var5 = 0;
-    buffer_for_playing_songs = 0;
-    zelda_snes_dummy_write(NMITIMEN, 0);
-    zelda_snes_dummy_write(HDMAEN, 0);
+    queued_music_control = 0;
     BG1HOFS_copy2 = 0;
     BG2HOFS_copy2 = 0;
     BG3HOFS_copy2 = 0;
@@ -964,17 +848,11 @@ void Death_Func15(bool count_as_death) {  // 89f50f
     memset(save_dung_info, 0, 256 * 5);
     flag_which_music_type = 0;
     LoadOverworldSongs();
-    zelda_snes_dummy_write(NMITIMEN, 0x81);
   }
 }
 
 void GameOver_AnimateChoiceFairy() {  // 89f67a
-  int spr = 0x14;
-  bytewise_extended_oam[spr] = 2;
-  oam_buf[spr].x = 0x34;
-  oam_buf[spr].y = kDeath_SprY0[subsubmodule_index];
-  oam_buf[spr].charnum = kDeath_SprChar0[frame_counter >> 3 & 1];
-  oam_buf[spr].flags = 0x78;
+  SetOamPlain(&oam_buf[0x14], 0x34, kDeath_SprY0[subsubmodule_index], kDeath_SprChar0[frame_counter >> 3 & 1], 0x78, 2);
 }
 
 void GameOver_InitializeRevivalFairy() {  // 89f6a4
@@ -1076,7 +954,7 @@ void Module0E_0A_FluteMenu() {  // 8ab730
 }
 
 void FluteMenu_HandleSelection() {  // 8ab78b
-  PointU8 pt;
+  Point16U pt;
 
   if (some_menu_ctr == 0) {
     if ((joypad1L_last | joypad1H_last) & 0xc0) {
@@ -1100,7 +978,7 @@ void FluteMenu_HandleSelection() {  // 8ab78b
   }
   birdtravel_var1[0] = birdtravel_var1[0] & 7;
   if (frame_counter & 0x10 && WorldMap_CalculateOamCoordinates(&pt))
-    WorldMap_HandleSpriteBlink(16, 2, 0x3e, 0, pt.x - 4, pt.y - 4);
+    WorldMap_AddSprite(16, 2, 0x3e, 0, pt.x - 4, pt.y - 4);
 
   uint16 ybak = link_y_coord_spexit;
   uint16 xbak = link_x_coord_spexit;
@@ -1114,7 +992,7 @@ void FluteMenu_HandleSelection() {  // 8ab78b
     link_y_coord_spexit = kBirdTravel_y_hi[i] << 8 | kBirdTravel_y_lo[i];
 
     if (WorldMap_CalculateOamCoordinates(&pt))
-      WorldMap_HandleSpriteBlink(i, 0, (i == birdtravel_var1[0]) ? 0x30 + (frame_counter & 6) : 0x32, kBirdTravel_tab1[i], pt.x, pt.y);
+      WorldMap_AddSprite(i, 0, (i == birdtravel_var1[0]) ? 0x30 + (frame_counter & 6) : 0x32, kBirdTravel_tab1[i], pt.x, pt.y);
   }
   link_x_coord_spexit = xbak;
   link_y_coord_spexit = ybak;
@@ -1144,7 +1022,7 @@ void FluteMenu_LoadSelectedScreen() {  // 8ab8c5
   sound_effect_2 = 16;
   uint8 m = overworld_music[BYTE(overworld_screen_index)];
   sound_effect_ambient = m >> 4;
-  music_control = (m & 0xf) != music_unk1 ? (m & 0xf) : 0xf3;
+  music_control = ZeldaIsPlayingMusicTrack(m & 0xf) ? 0xf3 : m & 0xf;
 }
 
 void Overworld_LoadOverlayAndMap() {  // 8ab948
@@ -1229,9 +1107,7 @@ void WorldMap_FadeOut() {  // 8ab9a3
   sound_effect_2 = 16;
   sound_effect_ambient = 5;
   music_control = 0xf2;
-  zelda_ppu_write(BGMODE, 7);
   BGMODE_copy = 7;
-  zelda_ppu_write(M7SEL, 0x80);
 }
 
 void WorldMap_LoadLightWorldMap() {  // 8aba30
@@ -1343,7 +1219,6 @@ void WorldMap_RestoreGraphics() {  // 8abbd6
 void Attract_SetUpConclusionHDMA() {  // 8abc33
   HdmaSetup(0xABDDD, 0xABDDD, 0x42, (uint8)M7A, (uint8)M7D, 0);
   HDMAEN_copy = 0x80;
-  zelda_ppu_write(BGMODE, 9);
   BGMODE_copy = 9;
   nmi_disable_core_updates = 0;
 }
@@ -1375,14 +1250,6 @@ void WorldMap_SetUpHDMA() {  // 8abc96
   WOBJSEL_copy = 0;
   TMW_copy = 0;
   TSW_copy = 0;
-  zelda_ppu_write(M7B, 0);
-  zelda_ppu_write(M7B, 0);
-  zelda_ppu_write(M7C, 0);
-  zelda_ppu_write(M7C, 0);
-  zelda_ppu_write(M7X, 0);
-  zelda_ppu_write(M7X, 1);
-  zelda_ppu_write(M7Y, 0);
-  zelda_ppu_write(M7Y, 1);
 
   if (main_module_index == 20) {
     HdmaSetup(0xABDDD, 0xABDDD, 0x42, (uint8)M7A, (uint8)M7D, 0);
@@ -1415,10 +1282,10 @@ void WorldMap_FillTilemapWithEF() {  // 8abda5
 }
 
 void WorldMap_HandleSprites() {  // 8abf66
-  PointU8 pt;
+  Point16U pt;
 
   if (frame_counter & 0x10 && WorldMap_CalculateOamCoordinates(&pt))
-    WorldMap_HandleSpriteBlink(0, 2, 0x3e, 0, pt.x - 4, pt.y - 4);
+    WorldMap_AddSprite(0, 2, 0x3e, 0, pt.x - 4, pt.y - 4);
 
   uint16 ybak = link_y_coord_spexit;
   uint16 xbak = link_x_coord_spexit;
@@ -1430,7 +1297,7 @@ void WorldMap_HandleSprites() {  // 8abf66
     link_x_coord_spexit = bird_travel_x_hi[k] << 8 | bird_travel_x_lo[k];
     link_y_coord_spexit = bird_travel_y_hi[k] << 8 | bird_travel_y_lo[k];
     if (WorldMap_CalculateOamCoordinates(&pt))
-      WorldMap_HandleSpriteBlink(15, 2, kOverworldMap_Table4[frame_counter >> 1 & 3], 0x6a, pt.x, pt.y);
+      WorldMap_AddSprite(15, 2, kOverworldMap_Table4[frame_counter >> 1 & 3], 0x6a, pt.x, pt.y);
   }
 
   if (save_ow_event_info[0x5b] & 0x20 || (((savegame_map_icons_indicator >= 6) ^ is_in_dark_world) & 1))
@@ -1452,7 +1319,7 @@ void WorldMap_HandleSprites() {  // 8abf66
       uint8 ext = 2;
       if (!(info >> 8))
         info = kOwMap_tab2[frame_counter >> 3 & 3] << 8 | 0x32, ext = 0;
-      WorldMap_HandleSpriteBlink(14, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
+      WorldMap_AddSprite(14, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
     }
   endif_crystal0:;
   }
@@ -1471,7 +1338,7 @@ void WorldMap_HandleSprites() {  // 8abf66
       uint8 ext = 2;
       if (!(info >> 8))
         info = kOwMap_tab2[frame_counter >> 3 & 3] << 8 | 0x32, ext = 0;
-      WorldMap_HandleSpriteBlink(13, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
+      WorldMap_AddSprite(13, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
     }
   endif_crystal1:;
   }
@@ -1490,7 +1357,7 @@ void WorldMap_HandleSprites() {  // 8abf66
       uint8 ext = 2;
       if (!(info >> 8))
         info = kOwMap_tab2[frame_counter >> 3 & 3] << 8 | 0x32, ext = 0;
-      WorldMap_HandleSpriteBlink(12, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
+      WorldMap_AddSprite(12, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
     }
   endif_crystal2:;
   }
@@ -1509,7 +1376,7 @@ void WorldMap_HandleSprites() {  // 8abf66
       uint8 ext = 2;
       if (!(info >> 8))
         info = kOwMap_tab2[frame_counter >> 3 & 3] << 8 | 0x32, ext = 0;
-      WorldMap_HandleSpriteBlink(11, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
+      WorldMap_AddSprite(11, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
     }
   endif_crystal3:;
   }
@@ -1528,7 +1395,7 @@ void WorldMap_HandleSprites() {  // 8abf66
       uint8 ext = 2;
       if (!(info >> 8))
         info = kOwMap_tab2[frame_counter >> 3 & 3] << 8 | 0x32, ext = 0;
-      WorldMap_HandleSpriteBlink(10, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
+      WorldMap_AddSprite(10, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
     }
   endif_crystal4:;
   }
@@ -1547,7 +1414,7 @@ void WorldMap_HandleSprites() {  // 8abf66
       uint8 ext = 2;
       if (!(info >> 8))
         info = kOwMap_tab2[frame_counter >> 3 & 3] << 8 | 0x32, ext = 0;
-      WorldMap_HandleSpriteBlink(9, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
+      WorldMap_AddSprite(9, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
     }
   endif_crystal5:;
   }
@@ -1566,7 +1433,7 @@ void WorldMap_HandleSprites() {  // 8abf66
       uint8 ext = 2;
       if (!(info >> 8))
         info = kOwMap_tab2[frame_counter >> 3 & 3] << 8 | 0x32, ext = 0;
-      WorldMap_HandleSpriteBlink(8, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
+      WorldMap_AddSprite(8, ext, (uint8)info, (uint8)(info >> 8), pt.x, pt.y);
     }
   endif_crystal6:;
   }
@@ -1576,25 +1443,23 @@ out:
   link_y_coord_spexit = ybak;
 }
 
-bool WorldMap_CalculateOamCoordinates(PointU8 *pt) {  // 8ac39f
-  uint8 r14, r15;
-
+static bool WorldMap_CalculateOamCoordinates(Point16U *pt) {  // 8ac39f
   if (overworld_map_flags == 0) {
     int j = -(link_y_coord_spexit >> 4) + M7Y_copy + (link_y_coord_spexit >> 3 & 1) - 0xc0;
     uint8 t0 = kOverworldMap_tab1[j];
-    r15 = 13 * t0 >> 4;
+    uint8 yval = 13 * t0 >> 4;
 
     uint8 at = link_x_coord_spexit >> 4;
     bool below = at < 0x80;
     at -= 0x80;
     if (sign8(at)) at = ~at;
 
-    uint8 t1 = ((r15 < 224 ? r15 : 0) * 0x54 >> 8) + 0xb2;
+    uint8 t1 = ((yval < 224 ? yval : 0) * 0x54 >> 8) + 0xb2;
     uint8 t2 = at * t1 >> 8;
     uint8 t3 = (below) ? 0x80 - t2 : t2 + 0x80;
 
     pt->x = t3 - BG1HOFS_copy2 + 0x80;
-    pt->y = r15 + 12;
+    pt->y = yval + 12;
     return true;
   } else {
     uint16 t0 = -(link_y_coord_spexit >> 4) + M7Y_copy - 0x80;
@@ -1603,13 +1468,13 @@ bool WorldMap_CalculateOamCoordinates(PointU8 *pt) {  // 8ac39f
     uint16 t1 = t0 * 37 >> 4;
     if (t1 >= 333)
       return false;
-    r15 = kOverworldMap_tab1[t1];
+    uint8 yval = kOverworldMap_tab1[t1];
     uint16 t2 = link_x_coord_spexit;
     bool below = t2 < 0x7F8;
     t2 -= 0x7f8;
     if (sign16(t2))
       t2 = -t2;
-    uint8 t3 = r15 < 226 ? r15 : 0;
+    uint8 t3 = yval < 226 ? yval : 0;
     uint8 t4 = (t3 * 84 >> 8) + 178;  // r0
     uint8 t5 = (uint8)t2 * t4 >> 8; // r1
     uint16 t6 = (uint8)(t2 >> 8) * t4 + t5;
@@ -1620,31 +1485,29 @@ bool WorldMap_CalculateOamCoordinates(PointU8 *pt) {  // 8ac39f
     uint8 t9 = (uint8)t8 * 45 >> 8;
     uint16 t10 = ((t8 >> 8) * 45) + t9;
     uint16 t11 = below2 ? 0x80 - t10 : t10 + 0x80;
-    r14 = t11 - BG1HOFS_copy2;
-    uint16 t12 = t11 - 0xFF80 - BG1HOFS_copy2;
-    if (t12 >= 0x100)
+    uint16 xval = t11 - BG1HOFS_copy2;
+    int xt = enhanced_features0 & kFeatures0_ExtendScreen64 ? 0x48 : 0;
+    if ((uint16)(xval + 0x80 + xt) >= (0x100 + xt * 2))
       return false;
-    pt->x = r14 + 0x81;
-    pt->y = r15 + 16;
+    pt->x = xval + 0x81;
+    pt->y = yval + 16;
     return true;
   }
 }
 
-void WorldMap_HandleSpriteBlink(int spr, uint8 r11_ext, uint8 r12_flags, uint8 r13_char, uint8 r14_x, uint8 r15_y) {  // 8ac51c
-  if (!(frame_counter & 0x10) && r13_char == 100) {
+static void WorldMap_AddSprite(int spr, uint8 big, uint8 flags, uint8 ch, uint16 x, uint16 y) {  // 8ac51c
+  if (!(frame_counter & 0x10) && ch == 100) {
     assert(spr >= 8);
-    r13_char = kOverworldMapData[spr - 8];
-    r12_flags = 0x32;
-    r11_ext = 0;
+    ch = kOverworldMapData[spr - 8];
+    flags = 0x32;
+    big = 0;
   } else {
-    r14_x -= 4;
-    r15_y -= 4;
+    x -= 4;
+    y -= 4;
   }
-  bytewise_extended_oam[spr] = r11_ext;
-  oam_buf[spr].x = r14_x;
-  oam_buf[spr].y = r15_y;
-  oam_buf[spr].charnum = r13_char;
-  oam_buf[spr].flags = r12_flags;
+  if (enhanced_features0 & kFeatures0_ExtendScreen64)
+    big |= (x >> 8 & 1);
+  SetOamPlain(&oam_buf[spr], x, y, ch, flags, big);
 }
 
 bool OverworldMap_CheckForPendant(int k) {  // 8ac5a9
@@ -1665,7 +1528,6 @@ void Module0E_03_01_DrawMap() {  // 8ae0dc
 
 void Module0E_03_01_00_PrepMapGraphics() {  // 8ae0e4
   uint8 hdmaen_bak = HDMAEN_copy;
-  zelda_snes_dummy_write(HDMAEN, 0);
   HDMAEN_copy = 0;
   mapbak_main_tile_theme_index = main_tile_theme_index;
   mapbak_sprite_graphics_index = sprite_graphics_index;
@@ -1739,7 +1601,6 @@ void Module0E_03_01_02_DrawFloorsBackdrop() {  // 8ae1f3
 
 void DungeonMap_BuildFloorListBoxes(uint8 t5, uint16 r14) {  // 8ae2f5
   int n = (t5 & 0xf) + (t5 >> 4);
-  uint8 r12 = dung_cur_floor + (t5 & 0xf);
   r14 -= 0x40 - 2;
   r14 += (t5 & 0xf) * 0x40;
   int offs = vram_upload_offset >> 1;
@@ -1993,7 +1854,6 @@ void DungeonMap_HandleMovementInput() {  // 8ae979
 void DungeonMap_HandleFloorSelect() {  // 8ae986
   uint8 r2 = (kDungMap_Tab5[cur_palace_index_x2 >> 1] >> 4 & 0xf);
   uint8 r3 = (kDungMap_Tab5[cur_palace_index_x2 >> 1] & 0xf);
-  uint8 yv = 7;
   if (r2 + r3 < 3 || dungmap_var2 || !(joypad1H_last & 0xc))
     return;
   dungmap_cur_floor &= 0xff;
@@ -2060,33 +1920,23 @@ void DungeonMap_DrawLinkPointing(int spr_pos, uint8 r2, uint8 r3) {  // 8aeaf0
     if (a >= 0)
       r3 -= a;
   }
-  bytewise_extended_oam[spr_pos] = 2;
-  oam_buf[spr_pos].x = 0x19;
-  oam_buf[spr_pos].y = kDungMap_Tab33[r3] - 4;
-  oam_buf[spr_pos].charnum = 0;
-  oam_buf[spr_pos].flags = overworld_palette_swap_flag ? 0x30 : 0x3e;
+  SetOamPlain(&oam_buf[spr_pos], 0x19, kDungMap_Tab33[r3] - 4, 0, palette_swap_flag ? 0x30 : 0x3e, 2);
 }
 
 int DungeonMap_DrawBlinkingIndicator(int spr_pos) {  // 8aeb50
-  bytewise_extended_oam[spr_pos] = 0;
-  oam_buf[spr_pos].x = dungmap_var3 - 3;
-  oam_buf[spr_pos].y = ((dungmap_var5 < 256) ? dungmap_var5 : 0xf0) - 3;
-  oam_buf[spr_pos].charnum = 0x34;
-  oam_buf[spr_pos].flags = kDungMap_Tab38[frame_counter >> 2 & 3];
+  SetOamPlain(&oam_buf[spr_pos], dungmap_var3 - 3, ((dungmap_var5 < 256) ? dungmap_var5 : 0xf0) - 3, 0x34, kDungMap_Tab38[frame_counter >> 2 & 3], 0);
   return spr_pos + 1;
 }
 
 int DungeonMap_DrawLocationMarker(int spr_pos, uint16 r14) {  // 8aeba8
   for (int i = 3; i >= 0; i--, spr_pos++) {
-    bytewise_extended_oam[spr_pos] = 2;
-    oam_buf[spr_pos].x = kDungMap_Tab29[i] + (dungmap_var3 & 0xf0);
     uint8 r15 = dungmap_var6 + kDungMap_Tab24[r14];
-    oam_buf[spr_pos].y = r15 + kDungMap_Tab30[i];
-    oam_buf[spr_pos].charnum = 0;
     int fr = (frame_counter >> 2) & 1;
-    if ((dungmap_var5 + 1 & 0xf0) == ++r15 && dungmap_var5 < 256)
+    if ((dungmap_var5 + 1 & 0xf0) == r15 + 1 && dungmap_var5 < 256)
       fr += 2;
-    oam_buf[spr_pos].flags = kDungMap_Tab32[fr] | kDungMap_Tab31[i];
+    SetOamPlain(&oam_buf[spr_pos], kDungMap_Tab29[i] + (dungmap_var3 & 0xf0),
+                r15 + kDungMap_Tab30[i],
+                0, kDungMap_Tab32[fr] | kDungMap_Tab31[i], 2);
   }
   return spr_pos;
 }
@@ -2109,17 +1959,9 @@ int DungeonMap_DrawFloorNumberObjects(int spr_pos) {  // 8aec0a
   r2--;
   r3 = -r3;
   do {
-    bytewise_extended_oam[spr_pos+0] = 0;
-    bytewise_extended_oam[spr_pos+1] = 0;
-    oam_buf[spr_pos + 0].x = 0x30;
-    oam_buf[spr_pos + 1].x = 0x38;
-    oam_buf[spr_pos + 0].y = r4;
-    oam_buf[spr_pos + 1].y = r4;
+    SetOamPlain(&oam_buf[spr_pos + 0], 0x30, r4, sign8(r2) ? 0x1c : kDungMap_Tab34[r2], 0x3d, 0);
+    SetOamPlain(&oam_buf[spr_pos + 1], 0x38, r4, sign8(r2) ? kDungMap_Tab34[r2 ^ 0xff] : 0x1d, 0x3d, 0);
     r4 += 16;
-    oam_buf[spr_pos + 0].flags = 0x3d;
-    oam_buf[spr_pos + 1].flags = 0x3d;
-    oam_buf[spr_pos + 0].charnum = sign8(r2) ? 0x1c : kDungMap_Tab34[r2];
-    oam_buf[spr_pos + 1].charnum = sign8(r2) ? kDungMap_Tab34[r2 ^ 0xff] : 0x1d;
   } while (spr_pos += 2, r2-- != r3);
   return spr_pos;
 }
@@ -2149,17 +1991,9 @@ void DungeonMap_DrawFloorBlinker() {  // 8aeccf
     uint8 x = 40;
     int spr_pos = 0x40 + kDungMap_Tab35[flag];
     for (int i = 3; i >= 0; i--, spr_pos++) {
-      bytewise_extended_oam[spr_pos+0] = 0;
-      bytewise_extended_oam[spr_pos+4] = 0;
-      oam_buf[spr_pos + 0].x = x;
-      oam_buf[spr_pos + 4].x = x;
-      oam_buf[spr_pos + 0].y = y + flag * 16;
-      oam_buf[spr_pos + 4].y = y + flag * 16 + 8;
-      oam_buf[spr_pos + 0].charnum = kDungMap_Tab36[i];
-      oam_buf[spr_pos + 4].charnum = kDungMap_Tab36[i];
       uint8 t = 0x3d | (i ? 0 : 0x40);
-      oam_buf[spr_pos + 0].flags = t;
-      oam_buf[spr_pos + 4].flags = t | 0x80;
+      SetOamPlain(&oam_buf[spr_pos + 0], x, y + flag * 16 + 0, kDungMap_Tab36[i], t, 0);
+      SetOamPlain(&oam_buf[spr_pos + 4], x, y + flag * 16 + 8, kDungMap_Tab36[i], t | 0x80, 0);
       x += 8;
     }
   } while (flag--);
@@ -2172,12 +2006,8 @@ int DungeonMap_DrawBossIcon(int spr_pos) {  // 8aede4
   spr_pos = DungeonMap_DrawBossIconByFloor(spr_pos);
   if ((frame_counter & 0xf) >= 10)
     return spr_pos;
-  bytewise_extended_oam[spr_pos] = 0;
   uint16 xy = kDungMap_Tab37[dung];
-  oam_buf[spr_pos].x = (xy >> 8) + dungmap_var7 + 0x90;
-  oam_buf[spr_pos].y = (dungmap_var8 < 256) ? xy + dungmap_var8 : 0xf0;
-  oam_buf[spr_pos].charnum = 0x31;
-  oam_buf[spr_pos].flags = 0x33;
+  SetOamPlain(&oam_buf[spr_pos], (xy >> 8) + dungmap_var7 + 0x90, (dungmap_var8 < 256) ? xy + dungmap_var8 : 0xf0, 0x31, 0x33, 0);
   return spr_pos + 1;
 }
 
@@ -2194,18 +2024,12 @@ int DungeonMap_DrawBossIconByFloor(int spr_pos) {  // 8aee95
   }
   if ((frame_counter & 0xf) >= 10)
     return spr_pos;
-  bytewise_extended_oam[spr_pos] = 0;
-  uint16 xy = kDungMap_Tab37[dung];
-  oam_buf[spr_pos].x = 0x4C;
-  oam_buf[spr_pos].y = kDungMap_Tab33[r3];
-  oam_buf[spr_pos].charnum = 0x31;
-  oam_buf[spr_pos].flags = 0x33;
+  SetOamPlain(&oam_buf[spr_pos], 0x4c, kDungMap_Tab33[r3], 0x31, 0x33, 0);
   return spr_pos + 1;
 }
 
 void DungeonMap_RecoverGFX() {  // 8aef19
   uint8 hdmaen_bak = HDMAEN_copy;
-  zelda_snes_dummy_write(HDMAEN, 0);
   HDMAEN_copy = 0;
   EraseTileMaps_normal();
 
@@ -2280,6 +2104,12 @@ void CopySaveToWRAM() {  // 8ccfbb
   word_7E021F = 0x7f;
   word_7E0221 = 0xffff;
 
+  // If you save / quit in the middle of a mosaic effect, such as
+  // being electrocuted by a buzz blob, the resumed game will skip
+  // the location prompt and start in the sanctuary.
+  if (enhanced_features0 & kFeatures0_MiscBugFixes)
+    mosaic_level = 0;
+
   hud_var1 = 128;
   main_module_index = 5;
   submodule_index = 0;
@@ -2314,8 +2144,7 @@ void Text_Initialize_initModuleStateLoop() {  // 8ec493
   RenderText_SetDefaultWindowPosition();
   text_tilemap_cur = 0x3980;
   Text_LoadCharacterBuffer();
-  RenderText_Draw_EmptyBuffer();
-  dialogue_msg_dst_offs = 0;
+  memset(messaging_buf, 0, 0x7e0);
   nmi_subroutine_index = 2;
   nmi_disable_core_updates = 2;
 }
@@ -2327,56 +2156,157 @@ void Text_InitVwfState() {  // 8ec4c9
   vwf_line_ptr = 0;
 }
 
-void Text_LoadCharacterBuffer() {  // 8ec4e2
-  const uint8 *src = GetCurrentTextPtr(), *src_org = src;
-  uint8 *dst = messaging_text_buffer;
-  dst[0] = dst[1] = 0x7f;
-  dialogue_msg_dst_offs = 0;
-  dialogue_msg_src_offs = 0;
-  for (;;) {
-    uint8 c = *src++;
-    if (!(c & 0x80)) {
-      switch (c) {
-      case 0x67 + 3: dst = Text_WritePlayerName(dst); break;
-      case 0x67 + 4:  // RenderText_ExtendedCommand_SetWindowType
-        text_render_state = *src++;
-        break;
-      case 0x67 + 5: {  // Text_WritePreloadedNumber
-        uint8 t = *src++;
-        uint8 v = byte_7E1CF2[t >> 1];
-        *dst++ = 0x34 + ((t & 1) ? v >> 4 : v & 0xf);
-        break;
-      }
-      case 0x67 + 6:
-        text_msgbox_topleft = kText_Positions[*src++];
-        break;
-      case 0x67 + 16:
-        text_tilemap_cur = ((0x387F & 0xe300) | 0x180) | (*src++ << 10) & 0x3c00;
-        break;
-      case 0x67 + 7:
-      case 0x67 + 17:
-      case 0x67 + 18:
-      case 0x67 + 19:
-        *dst++ = c;
-        *dst++ = *src++;
-        break;
-      case 0x7f:
-        dialogue_msg_dst_offs = dst - messaging_text_buffer;
-        dialogue_msg_src_offs = src - src_org - 1;
-        *dst = 0x7f;
-        return; // done
-      default:
-        *dst++ = c;
-        break;
-      }
-    } else {
-      // dictionary
-      c -= 0x88;
-      int idx = kTextDictionary_Idx[c], num = kTextDictionary_Idx[c + 1] - idx;
-      memcpy(dst, &kTextDictionary[idx], num);
-      dst += num;
+enum {
+  kTextCommandStart_US = 0x67,
+  kTextDictBase = 0x88,
+
+  kTextCmd_NextPic = 0,
+  kTextCmd_Choose = 1,
+  kTextCmd_Item = 2,
+  kTextCmd_Name = 3,
+  kTextCmd_Window = 4,  // Only used with 2
+  kTextCmd_Number = 5,
+  kTextCmd_Position = 6,
+  kTextCmd_ScrollSpd = 7,
+  kTextCmd_Selchg = 8,
+  kTextCmd_Choose3 = 10,
+  kTextCmd_Choose2 = 11,
+  kTextCmd_Scroll = 12,
+  kTextCmd_1 = 13,
+  kTextCmd_2 = 14,
+  kTextCmd_3 = 15,
+  kTextCmd_Color = 16,
+  kTextCmd_Wait = 17,
+  kTextCmd_Sound = 18,
+  kTextCmd_Speed = 19,
+  kTextCmd_Mark = 20,     // Unused
+  kTextCmd_Mark2 = 21,    // Unused
+  kTextCmd_Clear = 22,    // Unused
+  kTextCmd_Waitkey = 23,
+  kTextCmd_EndMessage = 24,
+
+  kTextCmd_IsLetter = 25, // Pseudo cmd
+};
+
+enum {
+  kTextCmd_EU_Scroll = 0x80,  // frequency 875
+  kTextCmd_EU_Waitkey = 0x81, // frequency 362
+  kTextCmd_EU_1 = 0x82,       // frequency 25
+  kTextCmd_EU_2 = 0x83,       // frequency 496
+  kTextCmd_EU_3 = 0x84,       // frequency 347
+  kTextCmd_EU_Name = 0x85,    // frequency 64
+  kTextCmd_EU_Rest = 0x87,    
+};
+
+#define TEXTCMD_MULTIBYTE(a) ((a) & 1)
+#define TEXTCMD_CMD(a) (((a) >> 1) & 0x1f)
+#define TEXTCMD_PARAM(a) ((a) >> 6)
+#define TEXTCMD_MK(c, x, m) ((c) << 6 | (x) << 1 | (m))
+
+uint32 Text_DecodeCmd(uint8 a, const uint8 *src) {
+  if ((g_zenv.dialogue_flags & 1) == 0) {
+    // US encoding
+    if (a < kTextCommandStart_US)
+      return TEXTCMD_MK(a, kTextCmd_IsLetter, 0);
+    if (a >= 0x80)
+      return TEXTCMD_MK(26, kTextCmd_IsLetter, 0); // could happen when loading snapshots
+    assert(a < 0x80);
+    static const uint8 kText_CommandLengths_US[] = { 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0 };
+    if (kText_CommandLengths_US[a - kTextCommandStart_US])
+      return TEXTCMD_MK(*src, a - kTextCommandStart_US, 1);
+    else
+      return TEXTCMD_MK(0, a - kTextCommandStart_US, 0);
+  } else {
+    // EU encoding
+    if (a < 0x7f)
+      return TEXTCMD_MK(a, kTextCmd_IsLetter, 0);
+    static const uint8 kSoundLut[] = {45};
+    static const uint8 kReturns_Simple[] = {
+      TEXTCMD_MK(0, kTextCmd_EndMessage, 0),
+      TEXTCMD_MK(0, kTextCmd_Scroll, 0),
+      TEXTCMD_MK(0, kTextCmd_Waitkey, 0),
+      TEXTCMD_MK(0, kTextCmd_1, 0),
+      TEXTCMD_MK(0, kTextCmd_2, 0),
+      TEXTCMD_MK(0, kTextCmd_3, 0),
+      TEXTCMD_MK(0, kTextCmd_Name, 0),
+      TEXTCMD_MK(0, kTextCmd_Name, 0), // Unused
+    };
+    if (a < kTextCmd_EU_Rest)
+      return kReturns_Simple[a - 0x7f];
+    a = *src;
+    switch (a >> 4) {
+    case 0: return TEXTCMD_MK(a & 0xF, kTextCmd_Wait, 1);
+    case 1: return TEXTCMD_MK(a & 0xF, kTextCmd_Color, 1);
+    case 2: return TEXTCMD_MK(a & 0xF, kTextCmd_Number, 1);
+    case 3: return TEXTCMD_MK(a & 0xF, kTextCmd_Speed, 1);
+    case 4: return TEXTCMD_MK(kSoundLut[a & 0xF], kTextCmd_Sound, 1);
+    case 8: {
+      static const uint8 kReturns_Ext[] = {
+        TEXTCMD_MK(0, kTextCmd_Choose, 1),
+        TEXTCMD_MK(0, kTextCmd_Choose2, 1),
+        TEXTCMD_MK(0, kTextCmd_Choose3, 1),
+        TEXTCMD_MK(0, kTextCmd_Selchg, 1),
+        TEXTCMD_MK(0, kTextCmd_Item, 1),
+        TEXTCMD_MK(0, kTextCmd_NextPic, 1),
+        TEXTCMD_MK(2, kTextCmd_Window, 1),
+        TEXTCMD_MK(0, kTextCmd_Position, 1),
+        TEXTCMD_MK(1, kTextCmd_Position, 1),
+      };
+      return kReturns_Ext[a - 0x80];
+    }
+    default:
+      assert(0);
+      return TEXTCMD_MK(26, kTextCmd_IsLetter, 0);
     }
   }
+}
+
+// Perform initial parsing of the string, expanding words, processing some commands, etc.
+void Text_LoadCharacterBuffer() {  // 8ec4e2
+  MemBlk dictionary = FindIndexInMemblk(g_zenv.dialogue_blk, 0);
+  MemBlk dialogue = FindIndexInMemblk(g_zenv.dialogue_blk, 1);
+  MemBlk text_str = FindIndexInMemblk(dialogue, dialogue_message_index);
+  const uint8 *src = text_str.ptr, *src_end = src + text_str.size, *src_org = src;
+  uint8 *dst = messaging_text_buffer;
+  while (src < src_end) {
+    uint8 c = *src++;
+    if (c >= kTextDictBase) {
+      MemBlk blk = FindIndexInMemblk(dictionary, c - kTextDictBase);
+      memcpy(dst, blk.ptr, blk.size);
+      dst += blk.size;
+      continue;
+    }
+    // Decode the next byte or multibyte character (in case we support that in the future)
+    // This is dependent on the current language cause US / PAL encode commands differently
+    uint32 cmd = Text_DecodeCmd(c, src);
+    switch (TEXTCMD_CMD(cmd)) {
+    case kTextCmd_Name: dst = Text_WritePlayerName(dst); break;
+    case kTextCmd_Window:  // RenderText_ExtendedCommand_SetWindowType
+      text_render_state = TEXTCMD_PARAM(cmd);
+      break;
+    case kTextCmd_Number: {  // Text_WritePreloadedNumber
+      uint8 t = TEXTCMD_PARAM(cmd);
+      uint8 v = dialogue_number[t >> 1];
+      *dst++ = 0x34 + ((t & 1) ? v >> 4 : v & 0xf);
+      break;
+    }
+    case kTextCmd_Position:
+      text_msgbox_topleft = kText_Positions[TEXTCMD_PARAM(cmd)];
+      break;
+    case kTextCmd_Color:
+      text_tilemap_cur = ((0x387F & 0xe300) | 0x180) | (TEXTCMD_PARAM(cmd) << 10) & 0x3c00;
+      break;
+    default:
+      // This combination is handled when rendering instead of here
+      *dst++ = c;
+      if (TEXTCMD_MULTIBYTE(cmd))
+        *dst++ = *src;
+      break;
+    }
+    src += TEXTCMD_MULTIBYTE(cmd);
+  }
+  *dst = 0x7f;
+  dialogue_msg_read_pos = 0;
 }
 
 uint8 *Text_WritePlayerName(uint8 *p) {  // 8ec5b3
@@ -2451,133 +2381,103 @@ void RenderText_Draw_CharacterTilemap() {  // 8ec97d
 }
 
 void RenderText_Draw_MessageCharacters() {  // 8ec984
-restart:
-  if (dialogue_msg_src_offs >= 99) {
-    dialogue_msg_src_offs = 0;
-    text_next_position = 0;
-  } else if (dialogue_msg_src_offs >= 59 && dialogue_msg_src_offs < 80) {
-    dialogue_msg_src_offs = 0x50;
-    text_next_position = 0;
-  } else if (dialogue_msg_src_offs >= 19 && dialogue_msg_src_offs < 40) {
-    dialogue_msg_src_offs = 0x28;
-    text_next_position = 0;
-  }
-  if ((dialogue_msg_src_offs == 18 || dialogue_msg_src_offs == 58 || dialogue_msg_src_offs == 98) && (text_next_position & 7) >= 6) {
-    dialogue_msg_src_offs++;
-    goto restart;
-  }
-  int t = (messaging_text_buffer[dialogue_msg_dst_offs] & 0x7f) - 0x66;
-  if (t < 0)
-    t = 0;
-  switch (t) {
-  case 0:  // RenderText_Draw_RenderCharacter
-    switch (vwf_line_mode < 2 ? vwf_line_mode : 2) {
-    case 0:  // RenderText_Draw_RenderCharacter_All
-      RenderText_Draw_RenderCharacter_All();
-      break;
-    case 1:  // VWF_RenderSingle
-      VWF_RenderSingle();
-      break;
-    default:
-      vwf_line_mode--;
+RESTART:;
+  uint32 cmd = Text_DecodeCmd(messaging_text_buffer[dialogue_msg_read_pos],
+      &messaging_text_buffer[dialogue_msg_read_pos + 1]);
+
+  switch (TEXTCMD_CMD(cmd)) {
+  case kTextCmd_IsLetter:
+    if (vwf_line_speed_cur >= 2) {
+      vwf_line_speed_cur--;
       break;
     }
+    VWF_RenderSingle(TEXTCMD_PARAM(cmd));
+    dialogue_msg_read_pos += 1 + TEXTCMD_MULTIBYTE(cmd);
+    if (vwf_line_speed_cur == 0)
+      goto RESTART;
     break;
-  case 1:  // RenderText_Draw_NextImage
+  case kTextCmd_NextPic:  // RenderText_Draw_NextImage
     if (main_module_index == 20) {
       PaletteFilterHistory();
       if (!BYTE(palette_filter_countdown))
-        dialogue_msg_dst_offs++;
+        goto COMMAND_DONE;
     } else {
-      dialogue_msg_dst_offs++;
+      goto COMMAND_DONE;
     }
     break;
-  case 2:  // RenderText_Draw_Choose2LowOr3
+  case kTextCmd_Choose:  // RenderText_Draw_Choose2LowOr3
     RenderText_Draw_Choose2LowOr3();
     break;
-  case 3:  // RenderText_Draw_ChooseItem
+  case kTextCmd_Item:  // RenderText_Draw_ChooseItem
     RenderText_Draw_ChooseItem();
     break;
-  case 4:  //
-  case 5:  //
-  case 6:  //
-  case 7:  //
-  case 8:  // RenderText_Draw_Ignore
-    byte_7E1CEA = messaging_text_buffer[dialogue_msg_dst_offs + 1];
-    dialogue_msg_dst_offs += 2;
-    break;
-  case 9:   // RenderText_Draw_Choose2HiOr3
-    RenderText_Draw_Choose2HiOr3();
-    break;
-  case 10:  //
+  case kTextCmd_Name:
+  case kTextCmd_Window:
+  case kTextCmd_Number:
+  case kTextCmd_Position:
+  case kTextCmd_Color:
+    // These get handled in Text_LoadCharacterBuffer
     assert(0);
     break;
-  case 11:  // RenderText_Draw_Choose3
+  // These are unused
+  case kTextCmd_Mark:
+  case kTextCmd_Mark2:
+  case kTextCmd_Clear:
+    assert(0);
+    break;
+  case kTextCmd_ScrollSpd:
+    dialogue_scroll_speed = TEXTCMD_PARAM(cmd);
+    goto COMMAND_DONE;
+  case kTextCmd_Selchg:   // RenderText_Draw_Choose2HiOr3
+    RenderText_Draw_Choose2HiOr3();
+    break;
+  case kTextCmd_Choose3:  // RenderText_Draw_Choose3
     RenderText_Draw_Choose3();
     break;
-  case 12:  // RenderText_Draw_Choose1Or2
+  case kTextCmd_Choose2:  // RenderText_Draw_Choose1Or2
     RenderText_Draw_Choose1Or2();
     break;
-  case 13:  // RenderText_Draw_Scroll
-    RenderText_Draw_Scroll();
+  case kTextCmd_Scroll:  // RenderText_Draw_Scroll
+    if (RenderText_Draw_Scroll())
+      goto COMMAND_DONE;
     break;
-  case 14:  //
-  case 15:  //
-  case 16:  // VWF_SetLine
-    dialogue_msg_src_offs = kVWF_LinePositions[(t + 2) & 3];
-    vwf_curline = kVWF_RowPositions[(t + 2) & 3];
+  case kTextCmd_1:  //
+  case kTextCmd_2:  //
+  case kTextCmd_3:  // VWF_SetLine
+    vwf_curline = kVWF_RowPositions[TEXTCMD_CMD(cmd) - kTextCmd_1];
     vwf_flag_next_line = 1;
-    dialogue_msg_dst_offs++;
-    text_next_position = 0;
-    break;
-  case 17:  // RenderText_Draw_SetColor
-    byte_7E1CDC &= ~0x1c;
-    byte_7E1CDC |= (messaging_text_buffer[dialogue_msg_dst_offs + 1] & 7) << 2;
-    dialogue_msg_dst_offs += 2;
-    break;
-  case 18:  // RenderText_Draw_Wait
-    switch (joypad1L_last & 0x80 ? 1 : text_wait_countdown >= 2 ? 2 : text_wait_countdown) {
+    goto COMMAND_DONE;
+  case kTextCmd_Wait:  // RenderText_Draw_Wait
+    switch (joypad1L_last & 0x80 ? 1 : text_wait_countdown) {
     case 0:
-      text_wait_countdown = kText_WaitDurations[messaging_text_buffer[dialogue_msg_dst_offs + 1] & 0xf] - 1;
+      text_wait_countdown = kText_WaitDurations[TEXTCMD_PARAM(cmd)] - 1;
       break;
     case 1:
-      dialogue_msg_dst_offs += 2;
       BYTE(text_wait_countdown) = 0;
-      break;
-    case 2:
+      goto COMMAND_DONE;
+    default:
       text_wait_countdown--;
       break;
     }
     break;
-  case 19:  // RenderText_Draw_PlaySfx
-    sound_effect_2 = messaging_text_buffer[dialogue_msg_dst_offs + 1];
-    dialogue_msg_dst_offs += 2;
-    break;
-  case 20:  // RenderText_Draw_SetSpeed
-    vwf_line_speed = vwf_line_mode = messaging_text_buffer[dialogue_msg_dst_offs + 1];
-    dialogue_msg_dst_offs += 2;
-    break;
-  case 21:  // RenderText_Draw_Command7B
-    RenderText_Draw_Command7B();
-    break;
-  case 22:  // RenderText_Draw_ABunchOfSpaces
-    RenderText_Draw_ABunchOfSpaces();
-    break;
-  case 23:  // RenderText_Draw_EmptyBuffer
-    RenderText_Draw_EmptyBuffer();
-    break;
-  case 24:  // RenderText_Draw_PauseForInput
+  case kTextCmd_Sound:  // RenderText_Draw_PlaySfx
+    sound_effect_2 = TEXTCMD_PARAM(cmd);
+    goto COMMAND_DONE;
+  case kTextCmd_Speed:  // RenderText_Draw_SetSpeed
+    vwf_line_speed = vwf_line_speed_cur = TEXTCMD_PARAM(cmd);
+    goto COMMAND_DONE;
+  case kTextCmd_Waitkey:  // RenderText_Draw_PauseForInput
     if (text_wait_countdown2 != 0) {
       if (--text_wait_countdown2 == 1)
         sound_effect_2 = 36;
     } else {
       if ((filtered_joypad_H | filtered_joypad_L) & 0xc0) {
-        dialogue_msg_dst_offs++;
         text_wait_countdown2 = 28;
+        goto COMMAND_DONE;
       }
     }
     break;
-  case 25:  // RenderText_Draw_Terminate
+  case kTextCmd_EndMessage:  // RenderText_Draw_Terminate
     if (text_wait_countdown2 != 0) {
       if (--text_wait_countdown2 == 1)
         sound_effect_2 = 36;
@@ -2588,6 +2488,9 @@ restart:
       }
     }
     break;
+  }
+  if (0) COMMAND_DONE: {
+    dialogue_msg_read_pos += 1 + TEXTCMD_MULTIBYTE(cmd);
   }
   nmi_subroutine_index = 2;
   nmi_disable_core_updates = 2;
@@ -2606,35 +2509,27 @@ void RenderText_Draw_Finish() {  // 8eca35
   main_module_index = saved_module_for_menu;
 }
 
-void RenderText_Draw_RenderCharacter_All() {  // 8eca99
-  VWF_RenderSingle();
-  if (dialogue_msg_src_offs != 19 && dialogue_msg_src_offs != 59 && dialogue_msg_src_offs != 99)
-    RenderText_Draw_MessageCharacters();
-}
-
-void VWF_RenderSingle() {  // 8ecab8
-  uint8 t = messaging_text_buffer[dialogue_msg_dst_offs];
-  if (t != 0x59)
+void VWF_RenderSingle(int c) {  // 8ecab8
+  if (c != 0x59)
     sound_effect_2 = 12;
-  VWF_RenderCharacter();
-  vwf_line_mode = vwf_line_speed;
-}
+  vwf_line_speed_cur = vwf_line_speed;
 
-void VWF_RenderCharacter() {  // 8ecb5e
   if (vwf_flag_next_line) {
     vwf_line_ptr = kVWF_RenderCharacter_renderPos[vwf_curline>>1];
     vwf_var1 = kVWF_RenderCharacter_linePositions[vwf_curline>>1];
     vwf_flag_next_line = 0;
   }
-  uint8 c = messaging_text_buffer[dialogue_msg_dst_offs];
-  uint8 width = kVWF_RenderCharacter_widths[c];
+  
+  const uint8 *kFontData = FindIndexInMemblk(g_zenv.dialogue_font_blk, 0).ptr;
+  uint8 width = FindIndexInMemblk(g_zenv.dialogue_font_blk, 1).ptr[c];
+  assert(width <= 8);
+
   int i = vwf_var1++;
   uint8 arrval = vwf_arr[i];
   vwf_arr[i + 1] = arrval + width;
   uint16 r10 = (c & 0x70) * 2 + (c & 0xf);
   uint16 r0 = arrval * 2;
-  const uint16 *const kTextBits = GetFontPtr();
-  const uint16 *src2 = kTextBits + r10 * 8;
+  const uint16 *src2 = (uint16*)(kFontData + r10 * 16);
   uint8 *mbuf = (uint8 *)messaging_buf;
   for (int i = 0; i != 16; i += 2) {
     uint16 r4 = *src2++;
@@ -2659,7 +2554,7 @@ void VWF_RenderCharacter() {  // 8ecb5e
       WORD(mbuf[x + 0]) = r4;
   }
   uint16 r8 = vwf_line_ptr + 0x150;
-  const uint16 *src3 = kTextBits + (r10 + 16) * 8;
+  const uint16 *src3 = (uint16*)(kFontData + (r10 + 16) * 16);
   for (int i = 0; i != 16; i += 2) {
     uint16 r4 = *src3++;
     int y = r8 + r0;
@@ -2682,7 +2577,6 @@ void VWF_RenderCharacter() {  // 8ecb5e
     if (r4 != 0)
       WORD(mbuf[x + 0]) = r4;
   }
-  dialogue_msg_dst_offs++;
 }
 
 void RenderText_Draw_Choose2LowOr3() {  // 8ecd1a
@@ -2700,8 +2594,6 @@ void RenderText_Draw_Choose2LowOr3() {  // 8ecd1a
     sound_effect_2 = 32;
     dialogue_message_index = t + 1;
     Text_LoadCharacterBuffer();
-    text_next_position = 0;
-    dialogue_msg_dst_offs = 0;
     Text_InitVwfState();
   }
 }
@@ -2774,8 +2666,6 @@ void RenderText_Draw_Choose2HiOr3() {  // 8ece83
     sound_effect_2 = 32;
     dialogue_message_index = t + 11;
     Text_LoadCharacterBuffer();
-    text_next_position = 0;
-    dialogue_msg_dst_offs = 0;
     Text_InitVwfState();
   }
 }
@@ -2798,8 +2688,6 @@ void RenderText_Draw_Choose3() {  // 8ecef7
     sound_effect_2 = 32;
     dialogue_message_index = choice + 6;
     Text_LoadCharacterBuffer();
-    text_next_position = 0;
-    dialogue_msg_dst_offs = 0;
     Text_InitVwfState();
   }
 }
@@ -2820,14 +2708,12 @@ void RenderText_Draw_Choose1Or2() {  // 8ecf72
     sound_effect_2 = 32;
     dialogue_message_index = t + 9;
     Text_LoadCharacterBuffer();
-    text_next_position = 0;
-    dialogue_msg_dst_offs = 0;
     Text_InitVwfState();
   }
 }
 
-void RenderText_Draw_Scroll() {  // 8ecfe2
-  uint8 r2 = byte_7E1CEA;
+bool RenderText_Draw_Scroll() {  // 8ecfe2
+  uint8 r2 = dialogue_scroll_speed;
   do {
     for (int i = 0; i < 0x7e0; i += 16) {
       uint16 *p = (uint16 *)((uint8 *)messaging_buf + i);
@@ -2845,43 +2731,12 @@ void RenderText_Draw_Scroll() {  // 8ecfe2
       p[i] = 0;
 
     if ((++byte_7E1CDF & 0xf) == 0) {
-      dialogue_msg_dst_offs++;
-      dialogue_msg_src_offs = 80;
       vwf_curline = 4;
       vwf_flag_next_line = 1;
-      text_next_position = 0;
-      break;
+      return true;
     }
   } while (r2--);
-}
-
-void RenderText_Draw_Command7B() {  // 8ed18d
-  int i = (messaging_text_buffer[dialogue_msg_dst_offs + 1] & 0x7f);
-  int j = dialogue_msg_src_offs;
-  WORD(g_ram[0x2D8 + j]) = kVWF_Command7B[i * 2 + 0];
-  WORD(g_ram[0x300 + j]) = kVWF_Command7B[i * 2 + 1];
-  dialogue_msg_src_offs = j + 2;
-  dialogue_msg_dst_offs += 2;
-  RenderText_Draw_MessageCharacters();
-}
-
-void RenderText_Draw_ABunchOfSpaces() {  // 8ed1bd
-  int i = (messaging_text_buffer[dialogue_msg_dst_offs + 1] & 0x7f);
-  int j = dialogue_msg_src_offs;
-  WORD(g_ram[0x2D8 + j]) = kVWF_Command7C[i * 4 + 0];
-  WORD(g_ram[0x300 + j]) = kVWF_Command7C[i * 4 + 1];
-  WORD(g_ram[0x2DA + j]) = kVWF_Command7C[i * 4 + 2];
-  WORD(g_ram[0x302 + j]) = kVWF_Command7C[i * 4 + 3];
-  dialogue_msg_src_offs = j + 4;
-  dialogue_msg_dst_offs += 2;
-  RenderText_Draw_MessageCharacters();
-}
-
-void RenderText_Draw_EmptyBuffer() {  // 8ed1f9
-  memset(messaging_buf, 0, 0x7e0);
-  dialogue_msg_src_offs = 0;
-  dialogue_msg_dst_offs++;
-  text_next_position = 0;
+  return false;
 }
 
 void RenderText_SetDefaultWindowPosition() {  // 8ed280
@@ -2930,28 +2785,19 @@ void RenderText_Refresh() {  // 8ed307
   nmi_load_bg_from_vram = 1;
 }
 
+
 void Text_GenerateMessagePointers() {  // 8ed3eb
-  const uint8 *src = kDialogueText;
+  // This is not actually used. Only for ram compat.
+  MemBlk dialogue = FindIndexInMemblk(g_zenv.dialogue_blk, 1);
   uint32 p = 0x1c8000;
   uint8 *dst = kTextDialoguePointers;
-  for (int i = 0;; i++) {
+  for (int i = 0; i < 398; i++) {
     if (i == 359)
       p = 0xedf40;
     WORD(dst[0]) = p;
     dst[2] = p >> 16;
     dst += 3;
-
-    if (i == 397)
-      break;
-
-    for (;;) {
-      int j = *src;
-      int len = (j >= 0x67 && j < 0x80) ? kText_CommandLengths[j - 0x67] : 1;
-      src += len;
-      p += len;
-      if (j == 0x7f)
-        break;
-    }
+    p += (uint32)FindIndexInMemblk(dialogue, i).size + 1;
   }
 }
 
@@ -3037,13 +2883,7 @@ void Death_PlayerSwoon() {  // 8ff5e3
     return;
   uint8 y = link_y_coord + 16 - BG2VOFS_copy2;
   uint8 x = link_x_coord + 7 - BG2HOFS_copy2;
-
-  int spr = 0x74;
-  bytewise_extended_oam[spr] = 2;
-  oam_buf[spr].x = x;
-  oam_buf[spr].y = y;
-  oam_buf[spr].charnum = 0xaa;
-  oam_buf[spr].flags = kDeath_SprFlags[link_is_on_lower_level] | 2;
+  SetOamPlain(&oam_buf[0x74], x, y, 0xaa, kDeath_SprFlags[link_is_on_lower_level] | 2, 2);
 }
 
 void Death_PrepFaint() {  // 8ffa6f
@@ -3069,6 +2909,9 @@ void Death_PrepFaint() {  // 8ffa6f
   if (link_item_moon_pearl)
     link_is_bunny = 0;
   link_timer_tempbunny = 0;
+  //bugfix: dying as permabunny doesn't restore link palette during death animation
+  if (enhanced_features0 & kFeatures0_MiscBugFixes)
+    LoadActualGearPalettes();
   sound_effect_1 = 0x27 | Link_CalculateSfxPan();
   for (int i = 0; i != 4; i++) {
     if (link_bottle_info[i] == 6)

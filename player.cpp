@@ -13,6 +13,8 @@
 #include "player_oam.h"
 #include "sprite_main.h"
 
+static bool g_ApplyLinksMovementToCamera_called;
+
 static const uint8 kSpinAttackDelays[] = { 1, 0, 0, 0, 0, 3, 0, 0, 1, 0, 3, 3, 3, 3, 4, 4, 1, 5 };
 static const uint8 kFireBeamSounds[] = { 1, 2, 3, 4, 0, 9, 18, 27 };
 static const int8 kTagalongArr1[] = { -1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -75,6 +77,7 @@ static const uint8 kLinkItem_MagicCosts[] = { 16, 8, 4, 32, 16, 8, 8, 4, 2, 8, 4
 static const uint8 kBombosAnimDelays[] = { 5, 5, 5, 5, 5, 5, 5, 5, 3, 3, 3, 3, 3, 7, 1, 1, 1, 1, 1, 13 };
 static const uint8 kBombosAnimStates[] = { 0, 1, 2, 3, 0, 1, 2, 3, 8, 9, 10, 11, 12, 10, 8, 13, 14, 15, 16, 17 };
 static const uint8 kEtherAnimDelays[] = { 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 3, 3 };
+static const uint8 kEtherAnimDelaysNoFlash[] = { 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 24, 24 };
 static const uint8 kEtherAnimStates[] = { 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 6, 7 };
 static const uint8 kQuakeAnimDelays[] = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 19 };
 static const uint8 kQuakeAnimStates[] = { 0, 1, 2, 3, 0, 1, 2, 3, 18, 19, 20, 22 };
@@ -177,7 +180,6 @@ void Link_ControlHandler() {  // 87807f
   }
   if (link_player_handler_state)
     Player_CheckHandleCapeStuff();
-
   kPlayerHandlers[link_player_handler_state]();
 }
 
@@ -232,20 +234,29 @@ void HandleLink_From1D() {  // 878130
 }
 
 void PlayerHandler_00_Ground_3() {  // 8781a0
+  g_ApplyLinksMovementToCamera_called = false;
+
   link_z_coord = 0xffff;
   link_actual_vel_z = 0xff;
   link_recoilmode_timer = 0;
 
   if (!Link_HandleToss()) {
     Link_HandleAPress();
-    if ((link_state_bits | link_grabbing_wall) == 0 && link_unk_master_sword == 0 && link_player_handler_state != 17) {
+    if ((link_state_bits | link_grabbing_wall) == 0 && link_unk_master_sword == 0 && link_player_handler_state != kPlayerState_StartDash) {
       Link_HandleYItem();
+      // Ensure we're not handling potions. Things further
+      // down don't assume this and change the module indexes randomly.
+      // This also fixes a bug where bombos, ether, quake get aborted if you use spin attack at the same time.
+      if ((enhanced_features0 & kFeatures0_MiscBugFixes) && (
+          main_module_index == 14 && submodule_index != 2 ||
+          link_player_handler_state == kPlayerState_Bombos ||
+          link_player_handler_state == kPlayerState_Ether ||
+          link_player_handler_state == kPlayerState_Quake))
+        goto getout_clear_vel;
       if (sram_progress_indicator != 0) {
         Link_HandleSwordCooldown();
-        if (link_player_handler_state == 3) {
-          link_x_vel = link_y_vel = 0;
-          goto getout_dostuff;
-        }
+        if (link_player_handler_state == 3)
+          goto getout_clear_vel;
       }
     }
   }
@@ -284,7 +295,7 @@ void PlayerHandler_00_Ground_3() {  // 8781a0
     if ((dir = (force_move_any_direction & 0xf)) == 0) {
       if (link_grabbing_wall & 2)
         goto endif_3;
-      if ((dir = (joypad1H_last & 0xf)) == 0) {
+      if ((dir = (joypad1H_last & kJoypadH_AnyDir)) == 0) {
         link_x_vel = 0;
         link_y_vel = 0;
         link_direction = 0;
@@ -312,11 +323,18 @@ endif_3:
   Link_HandleVelocity();
   Link_HandleCardinalCollision();
   Link_HandleMovingAnimation_FullLongEntry();
-  if (link_unk_master_sword)
+  if (link_unk_master_sword) getout_clear_vel: {
     link_y_vel = link_x_vel = 0;
+  }
 
-getout_dostuff:
   fallhole_var1 = 0;
+
+  // HandleIndoorCameraAndDoors must not be called twice in the same frame,
+  // this might mess up camera positioning. For example when using spin attack
+  // in between bumpers.
+  if (g_ApplyLinksMovementToCamera_called && (enhanced_features0 & kFeatures0_MiscBugFixes))
+    return;
+
   HandleIndoorCameraAndDoors();
 }
 
@@ -427,7 +445,7 @@ void Link_TempBunny_Func2() {  // 8783fa
   ResetAllAcceleration();
   Link_HandleYItem();
   uint8 dir;
-  if (!(dir = force_move_any_direction & 0xf) && !(dir = joypad1H_last & 0xf)) {
+  if (!(dir = force_move_any_direction & 0xf) && !(dir = joypad1H_last & kJoypadH_AnyDir)) {
     link_x_vel = link_y_vel = 0;
     link_direction = link_direction_last = 0;
     link_animation_steps = 0;
@@ -505,7 +523,7 @@ void LinkState_HoldingBigRock() {  // 878481
   }
 
   Link_HandleAPress();
-  if (!(joypad1H_last & 0xf)) {
+  if (!(joypad1H_last & kJoypadH_AnyDir)) {
     link_y_vel = 0;
     link_x_vel = 0;
     link_direction = 0;
@@ -515,7 +533,7 @@ void LinkState_HoldingBigRock() {  // 878481
     link_timer_push_get_tired = 32;
     link_timer_jump_ledge = 19;
   } else {
-    link_direction = joypad1H_last & 0xf;
+    link_direction = joypad1H_last & kJoypadH_AnyDir;
     if (link_direction != link_direction_last) {
       link_direction_last = link_direction;
       link_subpixel_x = 0;
@@ -642,8 +660,6 @@ void LinkState_Recoil() {  // 8786b5
         t >>= 1;
       } while (!--s); // wtf?
       link_actual_vel_z = t;
-      if (t == 0)
-        link_recoilmode_timer = 3;
     } else {
       link_recoilmode_timer = 3;
     }
@@ -739,7 +755,7 @@ lbl_jump_into_middle:
     if ((link_direction & 0xc) == 0)
       link_actual_vel_y = 0;
   }
-  LinkHop_FindArbitraryLandingSpot(); // not
+  Link_MovePosition(); // not
 timer_running:
   if (link_player_handler_state != 6) {
     Link_HandleCardinalCollision(); // not
@@ -749,7 +765,7 @@ timer_running:
   if (BYTE(link_z_coord) == 0 || BYTE(link_z_coord) >= 0xe0) {
     Player_TileDetectNearby();
     if ((tiledetect_pit_tile & 0xf) == 0xf) {
-      link_player_handler_state = 1;
+      link_player_handler_state = kPlayerState_FallingIntoHole;
       link_speed_setting = 4;
     }
   }
@@ -793,13 +809,15 @@ void LinkHop_HoppingSouthOW() {  // 87894e
   link_actual_vel_z_copy = link_actual_vel_z_copy_mirror;
   link_z_coord = link_z_coord_mirror;
   link_actual_vel_z -= 2;
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
   if (sign8(link_actual_vel_z)) {
     if (link_actual_vel_z < 0xa0)
       link_actual_vel_z = 0xa0;
     if (link_z_coord >= 0xfff0) {
       link_z_coord = 0;
       Link_SplashUponLanding();
+      // This is the place that caused the water walking bug after bonk, 
+      // player_near_pit_state was not reset.
       if (player_near_pit_state)
         link_player_handler_state = kPlayerState_FallingIntoHole;
       if (link_player_handler_state != kPlayerState_Swimming &&
@@ -829,7 +847,7 @@ void LinkState_HandlingJump() {  // 878a05
   link_actual_vel_z_copy = link_actual_vel_z_copy_mirror;
   BYTE(link_z_coord) = link_z_coord_mirror;
   link_actual_vel_z -= 2;
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
   if (sign8(link_actual_vel_z)) {
     if (link_actual_vel_z < 0xa0)
       link_actual_vel_z = 0xa0;
@@ -1016,7 +1034,7 @@ finish:
 void LinkState_HoppingDiagonallyUpOW() {  // 878dc6
   draw_water_ripples_or_grass = 0;
   Player_ChangeZ(2);
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
   if (sign8(link_z_coord)) {
     Link_SplashUponLanding();
     if (link_player_handler_state != kPlayerState_Swimming && !link_is_in_deep_water)
@@ -1043,9 +1061,15 @@ void LinkState_HoppingDiagonallyDownOW() {  // 878e15
     LinkHop_FindLandingSpotDiagonallyDown();
     link_x_coord = old_x;
 
-    static const uint8 kLedgeVelX[] = { 4, 4, 4, 10, 10, 10, 11, 18, 18, 18, 20, 20, 20, 20, 22, 22, 26, 26, 26, 26, 28, 28, 28, 28 };
+    static const uint8 kLedgeVelX[] = { 
+      4, 4, 4, 10, 10, 10, 11, 18,
+      18, 18, 20, 20, 20, 20, 22, 22,
+      26, 26, 26, 26, 28, 28, 28, 28
+    };
 
-    int8 velx = kLedgeVelX[(uint16)(link_y_coord - link_y_coord_original) >> 3];
+    int t = (uint16)(link_y_coord - link_y_coord_original);
+    // Fix out of bounds read
+    int8 velx = kLedgeVelX[IntMin(t >> 3, 23)];
     link_actual_vel_x = (dir != 2) ? velx : -velx;
     if (!player_is_indoors)
       link_is_on_lower_level = 2;
@@ -1169,7 +1193,7 @@ void LinkState_Dashing() {  // 878f86
       follower_indicator = kTagalongArr2[follower_indicator];
   } else {
     index_of_dashing_sfx = 0;
-    if (!(joypad1L_last & 0x80)) {
+    if (!(joypad1L_last & kJoypadL_A)) {
       link_animation_steps = 0;
       link_countdown_for_dash = 0;
       link_speed_setting = 0;
@@ -1184,7 +1208,7 @@ void LinkState_Dashing() {  // 878f86
     link_dash_ctr = 64;
     link_speed_setting = 16;
     uint8 dir;
-    if (button_mask_b_y & 0x80 || is_standing_in_doorway || (dir = joypad1H_last & 0xf) == 0)
+    if (button_mask_b_y & 0x80 || is_standing_in_doorway || (dir = joypad1H_last & kJoypadH_AnyDir) == 0)
       dir = kDashTab2[link_direction_facing >> 1];
     link_some_direction_bits = link_direction = link_direction_last = dir;
     link_moving_against_diag_tile = 0;
@@ -1228,12 +1252,12 @@ void LinkState_Dashing() {  // 878f86
   bool want_stop_dash = false;
 
   if (enhanced_features0 & kFeatures0_TurnWhileDashing) {
-    if (!(joypad1L_last & 0x80)) {
+    if (!(joypad1L_last & kJoypadL_A)) {
       link_countdown_for_dash = 0x11;
       want_stop_dash = true;
     } else {
       static const uint8 kDashCtrlsToDir[16] = { 0, 1, 2, 0, 4, 4, 4, 0, 8, 8, 8, 0, 0, 0, 0, 0 };
-      uint8 t = kDashCtrlsToDir[joypad1H_last & 0xf];
+      uint8 t = kDashCtrlsToDir[joypad1H_last & kJoypadH_AnyDir];
       if (t != 0 && t != link_direction_last) {
         link_direction = link_direction_last = t;
         link_some_direction_bits = t;
@@ -1241,7 +1265,7 @@ void LinkState_Dashing() {  // 878f86
       }
     }
   } else {
-    want_stop_dash = (joypad1H_last & 0xf) && (joypad1H_last & 0xf) != kDashTab2[link_direction_facing >> 1];
+    want_stop_dash = (joypad1H_last & kJoypadH_AnyDir) && (joypad1H_last & kJoypadH_AnyDir) != kDashTab2[link_direction_facing >> 1];
   }
 
   if (want_stop_dash) {
@@ -1252,6 +1276,10 @@ void LinkState_Dashing() {  // 878f86
     LinkState_ExitingDash();
     return;
   }
+
+  if (link_speed_setting == 0 && (enhanced_features0 & kFeatures0_TurnWhileDashing))
+    link_speed_setting = 16;
+
   uint8 dir = force_move_any_direction & 0xf;
   if (dir == 0)
     dir = kDashTab2[link_direction_facing >> 1];
@@ -1266,7 +1294,7 @@ void LinkState_Dashing() {  // 878f86
 
 void LinkState_ExitingDash() {  // 87915e
   CacheCameraPropertiesIfOutdoors();
-  if (joypad1H_last & 0xf || link_countdown_for_dash >= 16) {
+  if (joypad1H_last & kJoypadH_AnyDir || link_countdown_for_dash >= 16) {
     link_countdown_for_dash = 0;
     link_speed_setting = 0;
     link_player_handler_state = kPlayerState_Ground;
@@ -1361,19 +1389,29 @@ void LinkState_Pits() {  // 8792d3
   } else {
     if (!link_is_running)
       goto aux_state;
-    if (link_countdown_for_dash) {
+    // If you use a turbo controller to perfectly spam the dash button,
+    // the check for Link being in a hole is endlessly skipped and you
+    // can levitate across chasms.
+    // Fix this by ensuring that the dash button is held down before proceeding to the dash state.
+    if (link_countdown_for_dash &&
+        (!(enhanced_features0 & kFeatures0_MiscBugFixes) || (joypad1L_last & kJoypadL_A))) {
       LinkState_Dashing();
       return;
     }
-    if (joypad1H_last & 0xf && !(joypad1H_last & 0xf & link_direction)) {
+    if (joypad1H_last & kJoypadH_AnyDir && !(joypad1H_last & kJoypadH_AnyDir & link_direction)) {
       Link_CancelDash();
 aux_state:
       if (link_auxiliary_state != 1)
-        link_direction = joypad1H_last & 0xF;
+        link_direction = joypad1H_last & kJoypadH_AnyDir;
     }
   }
   TileDetect_MainHandler(4);
   if (!(tiledetect_pit_tile & 1)) {
+    // Reset player_near_pit_state if we're no longer near a hole.
+    // This fixes a bug where you could walk on water
+    if (enhanced_features0 & kFeatures0_MiscBugFixes)
+      player_near_pit_state = 0;
+
     if (link_is_running) {
       LinkState_Dashing();
       return;
@@ -1446,6 +1484,8 @@ endif_1:
     ApplyLinksMovementToCamera();
     return;
   }
+
+  // Initiate fall down
   if (player_near_pit_state != 2) {
     if (link_item_moon_pearl) {
       link_need_for_poof_for_transform = 0;
@@ -1549,6 +1589,11 @@ void HandleDungeonLandingFromPit() {  // 879520
     if (tiledetect_which_y_pos[0] >= link_y_coord)
       return;
   }
+  //exploration glitch could also be armed without quitting
+  //by jumping off a dungeon ledge into an access pit
+  if (enhanced_features0 & kFeatures0_MiscBugFixes) {
+    about_to_jump_off_ledge = 0;
+  }
   link_y_coord = tiledetect_which_y_pos[0];
   link_animation_steps = 0;
   link_speed_modifier = 0;
@@ -1635,7 +1680,7 @@ void PlayerHandler_04_Swimming() {  // 87963b
 
   if (!link_swim_hard_stroke) {
     uint8 t;
-    if (!(swimcoll_var7[0] | swimcoll_var7[1]) || (t = ((filtered_joypad_L & 0x80) | filtered_joypad_H) & 0xc0) == 0) {
+    if (!(swimcoll_var7[0] | swimcoll_var7[1]) || (t = ((filtered_joypad_L & kJoypadL_A) | filtered_joypad_H) & 0xc0) == 0) {
       Link_HandleSwimMovements();
       return;
     }
@@ -1659,7 +1704,7 @@ void PlayerHandler_04_Swimming() {  // 87963b
 void Link_HandleSwimMovements() {  // 879715
   uint8 t;
 
-  if (!(t = force_move_any_direction & 0xf) && !(t = joypad1H_last & 0xf)) {
+  if (!(t = force_move_any_direction & 0xf) && !(t = joypad1H_last & kJoypadH_AnyDir)) {
     link_y_vel = link_x_vel = 0;
     Link_FlagMaxAccels();
     if (link_flag_moving) {
@@ -1716,7 +1761,7 @@ void Link_SetIceMaxAccel() {  // 8797a6
 }
 
 void Link_SetMomentum() {  // 8797c7
-  uint8 joy = joypad1H_last & 0xf;
+  uint8 joy = joypad1H_last & kJoypadH_AnyDir;
   uint8 mask = 12, bit = 8;
   for (int i = 0; i < 2; i++, mask >>= 2, bit >>= 2) {
     if (joy & mask) {
@@ -1946,16 +1991,20 @@ void Link_HandleYItem() {  // 879b0e
   }
 
   uint8 old_down = joypad1H_last, old_pressed = filtered_joypad_H, old_bottle = link_item_bottle_index;
-  if ((link_item_in_hand | link_position_mode) == 0) {
-    // Is X held down?
-    if (joypad1L_last & 0x40 && !(old_down & 0x40) && hud_cur_item_x != 0) {
-      
-      if (hud_cur_item_x >= kHudItem_Bottle1)
-        link_item_bottle_index = hud_cur_item_x - kHudItem_Bottle1 + 1;
-      item = Hud_LookupInventoryItem(hud_cur_item_x);
-      // Pretend it's actually Y that's down
-      joypad1H_last = old_down | 0x40;
-      filtered_joypad_H = old_pressed | filtered_joypad_L & 0x40;
+  if ((link_item_in_hand | link_position_mode) == 0 && !(old_down & kJoypadH_Y)) {
+    // Is any special key held down?
+    int btn_index = GetCurrentItemButtonIndex();
+    if (btn_index != 0) {
+      uint8 *cur_item_ptr = GetCurrentItemButtonPtr(btn_index);
+      if (*cur_item_ptr) {
+        if (*cur_item_ptr >= kHudItem_Bottle1)
+          link_item_bottle_index = *cur_item_ptr - kHudItem_Bottle1 + 1;
+        item = Hud_LookupInventoryItem(*cur_item_ptr);
+        // Pretend it's actually Y that's down
+        joypad1H_last = old_down | kJoypadH_Y;
+        static const uint8 kButtonIndexKeys[4] = { 0, kJoypadL_X, kJoypadL_L, kJoypadL_R };
+        filtered_joypad_H = old_pressed | ((filtered_joypad_L & kButtonIndexKeys[btn_index]) ? kJoypadH_Y : 0);
+      }
     }
   }
 
@@ -2081,10 +2130,6 @@ void Link_APress_PerformBasic(uint8 action_x2) {  // 879c5f
   default:
     assert(0);
   }
-
-  // Zelda vanilla bug: Disallow dragging while in cape mode, it uses no magic.
-  if (link_cape_mode && enhanced_features0 & kFeatures0_MiscBugFixes)
-    link_grabbing_wall = 0;
 }
 
 void HandleSwordSfxAndBeam() {  // 879c66
@@ -2126,7 +2171,7 @@ void Link_CheckForSwordSwing() {  // 879cd9
     link_animation_steps = 0;
   }
 
-  if (!(joypad1H_last & 0x80))
+  if (!(joypad1H_last & kJoypadH_B))
     button_mask_b_y |= 1;
   HaltLinkWhenUsingItems();
   link_direction &= ~0xf;
@@ -2141,7 +2186,7 @@ void Link_CheckForSwordSwing() {  // 879cd9
         AncillaAdd_SwordSwingSparkle(0x26, 4);
       if (link_sword_type != 0 && link_sword_type != 0xff)
         TileDetect_MainHandler(link_sword_type == 1 ? 1 : 6);
-    } else if (button_b_frames >= 4 && (button_mask_b_y & 1) && (joypad1H_last & 0x80)) {
+    } else if (button_b_frames >= 4 && (button_mask_b_y & 1) && (joypad1H_last & kJoypadH_B)) {
       button_mask_b_y &= ~1;
       HandleSwordSfxAndBeam();
       return;
@@ -2151,7 +2196,7 @@ void Link_CheckForSwordSwing() {  // 879cd9
 }
 
 void HandleSwordControls() {  // 879d72
-  if (joypad1H_last & 0x80) {
+  if (joypad1H_last & kJoypadH_B) {
     Player_Sword_SpinAttackJerks_HoldDown();
   } else {
     if (link_spin_attack_step_counter < 48) {
@@ -2267,7 +2312,7 @@ void LinkItem_Hammer() {  // 879f7b
   if (link_item_in_hand & 0x10)
     return;
   if (!(button_mask_b_y & 0x40)) {
-    if (is_standing_in_doorway || !(filtered_joypad_H & 0x40))
+    if (is_standing_in_doorway || !(filtered_joypad_H & kJoypadH_Y))
       return;
     button_mask_b_y |= 0x40;
     link_delay_timer_spin_attack = kHammerAnimDelays[0];
@@ -2363,7 +2408,7 @@ void LinkItem_Boomerang() {  // 87a0bb
     }
 
     if (!s0) {
-      link_direction_last = joypad1H_last & 0xf;
+      link_direction_last = joypad1H_last & kJoypadH_AnyDir;
     } else {
       link_cant_change_direction |= 1;
     }
@@ -2642,7 +2687,8 @@ void LinkState_UsingEther() {  // 87a50f
   } else if (step_counter_for_spin_attack == 12) {
     step_counter_for_spin_attack = 10;
   }
-  link_delay_timer_spin_attack = kEtherAnimDelays[step_counter_for_spin_attack];
+  const uint8 *table = (enhanced_features0 & kFeatures0_DimFlashes) ? kEtherAnimDelaysNoFlash : kEtherAnimDelays;
+  link_delay_timer_spin_attack = table[step_counter_for_spin_attack];
   state_for_spin_attack = kEtherAnimStates[step_counter_for_spin_attack];
   if (!byte_7E0324 && step_counter_for_spin_attack == 10) {
     byte_7E0324 = 1;
@@ -2738,7 +2784,7 @@ void LinkState_UsingQuake() {  // 87a6d6
     BYTE(link_z_coord) = link_z_coord_mirror;
     link_auxiliary_state = 2;
     Player_ChangeZ(2);
-    LinkHop_FindArbitraryLandingSpot();
+    Link_MovePosition();
     link_actual_vel_z_mirror = link_actual_vel_z;
     link_actual_vel_z_copy_mirror = link_actual_vel_z_copy;
     BYTE(link_z_coord_mirror) = link_z_coord;
@@ -2851,7 +2897,7 @@ void LinkState_SpinAttack() {  // 87a804
     state_for_spin_attack = 0;
     step_counter_for_spin_attack = 0;
     if (link_player_handler_state != kPlayerState_SpinAttackMotion) {
-      button_mask_b_y = (button_b_frames) ? (joypad1H_last & 0x80) : 0; // wtf, it's zero,
+      button_mask_b_y = (button_b_frames) ? (joypad1H_last & kJoypadH_B) : 0; // wtf, it's zero,
     }
     link_player_handler_state = kPlayerState_Ground;
   } else {
@@ -3146,7 +3192,7 @@ void LinkState_Hookshotting() {  // 87ab7c
   }
   return;
 loc_87AD49:
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
   TileDetect_MainHandler(5);
   if (player_is_indoors) {
     uint8 x = tiledetect_vertical_ledge >> 4 | tiledetect_vertical_ledge | detection_of_ledge_tiles_horiz_uphoriz;
@@ -3199,14 +3245,16 @@ void LinkItem_Cape() {  // 87adc1
     link_direction &= ~0xf;
     if (!--cape_decrement_counter) {
       cape_decrement_counter = kCapeDepletionTimers[link_magic_consumption];
-      if (!--link_magic_power) {
+      // Avoid magic underflow if an anti-fairy consumes magic.
+      if (link_magic_power == 0 && (enhanced_features0 & kFeatures0_MiscBugFixes) ||
+          !--link_magic_power) {
         Link_ForceUnequipCape();
         return;
       }
     }
     if (sign8(--link_bunny_transform_timer)) {
       link_bunny_transform_timer = 0;
-      if (filtered_joypad_H & 0x40)
+      if (filtered_joypad_H & kJoypadH_Y)
         Link_ForceUnequipCape();
     }
   }
@@ -3239,7 +3287,8 @@ void HaltLinkWhenUsingItems() {  // 87ae65
 }
 
 void Link_HandleCape_passive_LiftCheck() {  // 87ae88
-  if (link_state_bits & 0x80)
+  //bugfix: grabbing or pulling while wearing cape didn't drain magic
+  if (link_state_bits & 0x80 || (enhanced_features0 & kFeatures0_MiscBugFixes && link_grabbing_wall))
     Player_CheckHandleCapeStuff();
 }
 
@@ -3262,15 +3311,30 @@ void LinkItem_CaneOfSomaria() {  // 87aec0
     if (player_on_somaria_platform || is_standing_in_doorway || !CheckYButtonPress())
       return;
     int i = 4;
+    bool did_charge_magic = false;
+
     while (ancilla_type[i] != 0x2c) {
       if (--i < 0) {
-        if (!LinkCheckMagicCost(4))
+        if (!LinkCheckMagicCost(4)) {
+          // If you use the Cane of Somaria with an empty magic meter,
+          // then quickly switch to the mushroom or magic powder after
+          // the "no magic" prompt, you will automatically sprinkle magic powder
+          // despite pressing no button and having no magic.
+          if (enhanced_features0 & kFeatures0_MiscBugFixes)
+            goto out;
           return;
+        }
+        did_charge_magic = true;
         break;
       }
     }
     link_debug_value_2 = 1;
-    AncillaAdd_SomariaBlock(44, 1);
+    if (AncillaAdd_SomariaBlock(0x2c, 1) < 0) {
+      // If you use the Cane of Somaria while two bombs and the boomerang are active,
+      // magic will be refunded instead of used.
+      if (did_charge_magic || !(enhanced_features0 & kFeatures0_MiscBugFixes))
+        Refund_Magic(4);
+    }
     link_delay_timer_spin_attack = kRodAnimDelays[0];
     link_animation_steps = 0;
     player_handler_timer = 0;
@@ -3291,8 +3355,9 @@ void LinkItem_CaneOfSomaria() {  // 87aec0
   player_handler_timer = 0;
   link_delay_timer_spin_attack = 0;
   link_debug_value_2 = 0;
-  button_mask_b_y &= ~0x40;
   link_position_mode &= ~8;
+out:
+  button_mask_b_y &= ~0x40;
 }
 
 void LinkItem_CaneOfByrna() {  // 87af3e
@@ -3378,7 +3443,7 @@ void LinkItem_Net() {  // 87aff8
 }
 
 bool CheckYButtonPress() {  // 87b073
-  if (button_mask_b_y & 0x40 || link_incapacitated_timer || !(filtered_joypad_H & 0x40))
+  if (button_mask_b_y & 0x40 || link_incapacitated_timer || !(filtered_joypad_H & kJoypadH_Y))
     return false;
   button_mask_b_y |= 0x40;
   return true;
@@ -3443,7 +3508,7 @@ void Link_PerformThrow() {  // 87b11c
 
       flag_is_sprite_to_pick_up = 1;
       Sprite_SpawnThrowableTerrain(i, pt.x, pt.y);
-      filtered_joypad_L &= ~0x80;
+      filtered_joypad_L &= ~kJoypadL_A;
       player_handler_timer = 0;
     }
   } else {
@@ -3491,8 +3556,8 @@ void Link_APress_LiftCarryThrow() {  // 87b1ca
   } else {
     static const uint8 kLiftTab0[10] = { 8, 24, 8, 24, 8, 32, 6, 8, 13, 13 };
     static const uint8 kLiftTab1[10] = { 0, 1, 0, 1, 0, 1, 0, 1, 2, 3 };
-    static const uint8 kLiftTab2[] = { 6, 7, 7, 5, 10, 0, 23, 0, 18, 0, 18, 0, 8, 0, 8, 0, 254, 255, 17, 0,
-      0x54, 0x52, 0x50, 0xFF, 0x51, 0x53, 0x55, 0x56, 0x57};
+    static const uint8 kLiftTab2[29] = { 6, 7, 7, 5, 10, 0, 23, 0, 18, 0, 18, 0, 8, 0, 8, 0, 254, 255, 17, 0, 
+        0x54, 0x52, 0x50, 0xFF, 0x51, 0x53, 0x55, 0x56, 0x57 };
 
     if (player_handler_timer != 0) {
       if (player_handler_timer + 1 != 9) {
@@ -3506,13 +3571,14 @@ void Link_APress_LiftCarryThrow() {  // 87b1ca
           link_player_handler_state = 24;
           flag_is_sprite_to_pick_up = 1;
           Sprite_SpawnThrowableTerrain((what & 0xf) + 1, pt.x, pt.y);
-          filtered_joypad_L &= ~0x80;
+          filtered_joypad_L &= ~kJoypadL_A;
         }
         return;
       }
     } else {
-
-      // todo: This is an OOB read triggered when lifting for too long
+      // fix OOB read triggered when lifting for too long
+      if (some_animation_timer_steps >= sizeof(kLiftTab2) - 1)
+        return;
       some_animation_timer = kLiftTab2[++some_animation_timer_steps];
       assert(some_animation_timer_steps < arraysize(kLiftTab2));
       if (some_animation_timer_steps != 3)
@@ -3575,7 +3641,7 @@ set:
     some_animation_timer = kGrabWall_AnimTimer[link_var30d];
   }
 
-  if (!(joypad1L_last & 0x80)) {
+  if (!(joypad1L_last & kJoypadL_A)) {
     link_var30d = 0;
     some_animation_timer_steps = 0;
     link_grabbing_wall = 0;
@@ -3610,7 +3676,7 @@ void Link_APress_StatueDrag() {  // 87b389
   some_animation_timer_steps = kGrabWall_AnimSteps[link_var30d];
   some_animation_timer = kGrabWall_AnimTimer[link_var30d];
 skip_set:
-  if (!(joypad1L_last & 0x80)) {
+  if (!(joypad1L_last & kJoypadL_A)) {
     link_speed_setting = 0;
     link_is_near_moveable_statue = 0;
     link_var30d = 0;
@@ -3647,7 +3713,7 @@ void LinkState_TreePull() {  // 87b416
 
   if (link_grabbing_wall) {
     if (!button_mask_b_y) {
-      if (!(joypad1L_last & 0x80)) {
+      if (!(joypad1L_last & kJoypadL_A)) {
         link_grabbing_wall = 0;
         link_var30d = 0;
         some_animation_timer = 2;
@@ -3657,7 +3723,7 @@ void LinkState_TreePull() {  // 87b416
         LinkState_Default();
         return;
       }
-      if (!(joypad1H_last & 4))
+      if (!(joypad1H_last & kJoypadH_Down))
         goto out;
       button_mask_b_y = 4;
       Ancilla_Sfx2_Near(0x22);
@@ -3688,7 +3754,7 @@ reset_to_normal:
     return;
   }
   if (link_var30d == 9) {
-    if (!(filtered_joypad_H & 0xf))
+    if (!(filtered_joypad_H & kJoypadH_AnyDir))
       goto out2;
     link_player_handler_state = kPlayerState_Ground;
     LinkState_Default();
@@ -3710,7 +3776,7 @@ reset_to_normal:
   if (!(link_direction & 0xc))
     link_actual_vel_y = 0;
 out:
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
 out2:
   Link_HandleCardinalCollision();
   HandleIndoorCameraAndDoors();
@@ -3750,14 +3816,14 @@ void Link_PerformOpenChest() {  // 87b574
 }
 
 bool Link_CheckNewAPress() {  // 87b5c0
-  if (bitfield_for_a_button & 0x80 || link_incapacitated_timer || !(filtered_joypad_L & 0x80))
+  if (bitfield_for_a_button & 0x80 || link_incapacitated_timer || !(filtered_joypad_L & kJoypadL_A))
     return false;
   bitfield_for_a_button |= 0x80;
   return true;
 }
 
 bool Link_HandleToss() {  // 87b5d6
-  if (!(bitfield_for_a_button & 0x80) || !(filtered_joypad_L & 0x80) || (link_picking_throw_state & 1))
+  if (!(bitfield_for_a_button & 0x80) || !(filtered_joypad_L & kJoypadL_A) || (link_picking_throw_state & 1))
     return false;
   link_var30d = 0;
   link_var30e = 0;
@@ -3919,7 +3985,7 @@ xy:   RunSlopeCollisionChecks_HorizontalFirst();
     if (st != 19 && st != 8 && st != 9 && st != 10 && st != 3) {
       Player_TileDetectNearby();
       if (tiledetect_pit_tile & 0xf) {
-        link_player_handler_state = 1;
+        link_player_handler_state = kPlayerState_FallingIntoHole;
         if (!link_is_running)
           link_speed_setting = 4;
       }
@@ -4030,7 +4096,7 @@ void StartMovementCollisionChecks_Y_HandleIndoors() {  // 87ba35
       } // endif_6
 
       is_standing_in_doorway = 1;
-      byte_7E03F3 = 0;
+      link_on_conveyor_belt = 0;
       if ((R14 & 0x70) != 0x70) {
         if (R14 & 5) { // if_7
           link_moving_against_diag_tile = 0;
@@ -4067,7 +4133,7 @@ endif_1b:
 label_3:
 
   if ((R14 & 7) == 0 && (R12 & 5) != 0) {
-    byte_7E03F3 = 0;
+    link_on_conveyor_belt = 0;
     FlagMovingIntoSlopes_Y();
     if ((link_moving_against_diag_tile & 0xf) != 0)
       return;
@@ -4110,12 +4176,12 @@ label_3:
   }  // endif_12_norupee
 
   if (tiledetect_var4 & 0x22) {
-    byte_7E03F3 = tiledetect_var4 & 0x20 ? 2 : 1;
+    link_on_conveyor_belt = tiledetect_var4 & 0x20 ? 2 : 1;
   } else if (tiledetect_var4 & 0x2200) {
-    byte_7E03F3 = tiledetect_var4 & 0x2000 ? 4 : 3;
+    link_on_conveyor_belt = tiledetect_var4 & 0x2000 ? 4 : 3;
   } else {
     if (!(bitfield_spike_cactus_tiles & 7) && !(R14 & 2))
-      byte_7E03F3 = 0;
+      link_on_conveyor_belt = 0;
   } // endif_15
 
   if ((tiledetect_vertical_ledge & 7) == 7 && RunLedgeHopTimer()) {
@@ -4199,7 +4265,7 @@ endif_19:
     byte_7E005C = 9;
     link_this_controls_sprite_oam = 0;
     player_near_pit_state = 1;
-    link_player_handler_state = 1;
+    link_player_handler_state = kPlayerState_FallingIntoHole;
     return;
   } // endif_23
 
@@ -4340,7 +4406,7 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
       byte_7E005C = 9;
       link_this_controls_sprite_oam = 0;
       player_near_pit_state = 1;
-      link_player_handler_state = 1;
+      link_player_handler_state = kPlayerState_FallingIntoHole;
     }
     return;
   }
@@ -4716,7 +4782,7 @@ void StartMovementCollisionChecks_X_HandleIndoors() {  // 87c4ff
       } // endif_6
 
       is_standing_in_doorway = 2;
-      byte_7E03F3 = 0;
+      link_on_conveyor_belt = 0;
       if ((R14 & 0x70) != 0x70) {
         if (R14 & 7) { // if_7
           link_moving_against_diag_tile = 0;
@@ -4746,7 +4812,7 @@ else_7:
 label_3:
 
   if ((R14 & 2) == 0 && (R12 & 5) != 0) {
-    byte_7E03F3 = 0;
+    link_on_conveyor_belt = 0;
     FlagMovingIntoSlopes_X();
     if ((link_moving_against_diag_tile & 0xf) != 0)
       return;
@@ -4782,12 +4848,12 @@ label_3:
   }  // endif_12_norupee
 
   if (tiledetect_var4 & 0x22) {
-    byte_7E03F3 = tiledetect_var4 & 0x20 ? 2 : 1;
+    link_on_conveyor_belt = tiledetect_var4 & 0x20 ? 2 : 1;
   } else if (tiledetect_var4 & 0x2200) {
-    byte_7E03F3 = tiledetect_var4 & 0x2000 ? 4 : 3;
+    link_on_conveyor_belt = tiledetect_var4 & 0x2000 ? 4 : 3;
   } else {
     if (!(bitfield_spike_cactus_tiles & 7) && !(R14 & 2))
-      byte_7E03F3 = 0;
+      link_on_conveyor_belt = 0;
   } // endif_15
 
   if ((detection_of_ledge_tiles_horiz_uphoriz & 7) == 7 && RunLedgeHopTimer()) {
@@ -4839,7 +4905,7 @@ endif_19:
     byte_7E005C = 9;
     link_this_controls_sprite_oam = 0;
     player_near_pit_state = 1;
-    link_player_handler_state = 1;
+    link_player_handler_state = kPlayerState_FallingIntoHole;
     return;
   } // endif_23
 
@@ -4979,7 +5045,7 @@ void StartMovementCollisionChecks_X_HandleOutdoors() {  // 87c8e9
       byte_7E005C = 9;
       link_this_controls_sprite_oam = 0;
       player_near_pit_state = 1;
-      link_player_handler_state = 1;
+      link_player_handler_state = kPlayerState_FallingIntoHole;
     }
     return;
   }
@@ -5101,11 +5167,17 @@ void StartMovementCollisionChecks_X_HandleOutdoors() {  // 87c8e9
     return;
   } // endif_8
 
-  if ((R14 & 2) == 0 && (R12 & 5) != 0 && (!link_is_running || (link_direction_facing & 4))) {
-    FlagMovingIntoSlopes_X();
-    if ((link_moving_against_diag_tile & 0xf) != 0)
-      return;
-  }  // endif_9
+  // If force facing down (hold B button), while turboing on the Run key, we'll never
+  // reach FlagMovingIntoSlopes_X causing a Dash Buffering glitch.
+  // Fix by always calling it, not sure why you wouldn't always want to call it.
+  if ((R14 & 2) == 0 && (R12 & 5) != 0) {
+    bool skip_check = link_is_running && !(link_direction_facing & 4);
+    if (!skip_check || (enhanced_features0 & kFeatures0_MiscBugFixes)) {
+      FlagMovingIntoSlopes_X();
+      if ((link_moving_against_diag_tile & 0xf) != 0)
+        return;
+    }  // endif_9
+  }
 
   link_moving_against_diag_tile = 0;
 
@@ -5216,8 +5288,9 @@ void Link_HandleDiagonalKickback() {  // 87ccab
     static const int8 x1[] = { 0, -1, -1, -1, -2, -2, -2, -3, -3, -3 };
     link_x_coord += sign8(link_x_vel) ? x1[-(int8)link_x_vel] : x0[link_x_vel];
 
-    static const int8 y0[] = { 0, 0, 0, 1, 1, 1, 2, 2, 2, 3 };
-    static const int8 y1[] = { 0, 1, 1, 2, 2, 2, 3, 3, 3, 3 };
+    static const int8 y0[10] = { 0, 0, 0, 1, 1, 1, 2, 2, 2, 3 };
+    // Bug in zelda, might read index 15
+    static const int8 y1[16] = { 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 0xa5, 0x30, 0xf0, 0x04, 0xa5, 0x31 };
     link_y_coord += sign8(link_y_vel) ? y1[-(int8)link_y_vel] : y0[link_y_vel];
   } else {
 noHorizOrNoVertical:
@@ -5513,12 +5586,25 @@ void FlagMovingIntoSlopes_Y() {  // 87e076
   if (tiledetect_diagonal_tile & 5) {
     int8 ym = tiledetect_which_y_pos[0] & 7;
 
-    if (!(tiledetect_diag_state & 2)) {
-      ym = 8 - ym;
+    if (enhanced_features0 & kFeatures0_MiscBugFixes) {
+      if (tiledetect_diag_state & 2) {
+        ym = -ym;
+      } else {
+        ym = kAvoidJudder1[o] - (8 - ym);
+      }
     } else {
-      ym += 8;
+      // This code is bad because it could cause the player
+      // to move up to 15 pixels, causing an array out bounds read.
+      // Not sure how it works, but changed it to look more like the X version.
+      if (!(tiledetect_diag_state & 2)) {
+        ym = 8 - ym; // 0 to 8
+      } else {
+        ym += 8; // 8 to 15
+      }
+      // -15 to 7
+      ym = kAvoidJudder1[o] - ym;
     }
-    ym = kAvoidJudder1[o] - ym;
+
     if (link_y_vel == 0)
       return;
     if (sign8(link_y_vel))
@@ -5550,12 +5636,9 @@ void FlagMovingIntoSlopes_X() {  // 87e112
     int8 xm = link_x_coord & 7;
 
     if (tiledetect_diag_state != 4 && tiledetect_diag_state != 6) {
-      o ^= 7;
       xm = -xm;
     } else {
-      xm -= 8;
-      xm = -xm;
-      xm = kAvoidJudder1[o] - xm;
+      xm = kAvoidJudder1[o] - (8 - xm);
     } // endif_5
     if (link_x_vel == 0)
       return;
@@ -5679,10 +5762,10 @@ void Link_HandleVelocity() {  // 87e245
   link_actual_vel_z = 0xff;
   link_z_coord = 0xffff;
   link_subpixel_z = 0;
-  LinkHop_FindArbitraryLandingSpot();
+  Link_MovePosition();
 }
 
-void LinkHop_FindArbitraryLandingSpot() {  // 87e370
+void Link_MovePosition() {  // 87e370
   uint16 x = link_x_coord, y = link_y_coord;
   link_y_coord_safe_return_lo = link_y_coord;
   link_y_coord_safe_return_hi = link_y_coord >> 8;
@@ -5821,14 +5904,14 @@ void Link_ApplyConveyor() {  // 87e5f0
   static const int8 kMovingBeltY[4] = { -8, 8, 0, 0 };
   static const int8 kMovingBeltX[4] = { 0, 0, -8, 8 };
 
-  if (!byte_7E03F3)
+  if (!link_on_conveyor_belt)
     return;
   if (BYTE(link_z_coord) != 0 && BYTE(link_z_coord) != 0xff)
     return;
   if (link_grabbing_wall & 1 || link_player_handler_state == kPlayerState_Hookshot || link_auxiliary_state)
     return;
 
-  int j = byte_7E03F3 - 1;
+  int j = link_on_conveyor_belt - 1;
   if (link_is_running && link_dash_ctr == 32 && (link_direction & kMovePosDirFlag[j]))
     return;
 
@@ -5893,7 +5976,7 @@ void Link_HandleMovingAnimation_StartWithDash() {  // 87e704
   if (link_speed_setting == 6) {
     x += 4;
   } else if (link_flag_moving) {
-    if (!(joypad1H_last & 0xf)) {
+    if (!(joypad1H_last & kJoypadH_AnyDir)) {
       link_animation_steps = 0;
       return;
     }
@@ -5903,7 +5986,8 @@ void Link_HandleMovingAnimation_StartWithDash() {  // 87e704
   static const uint8 tab2[16] = { 4, 4, 4, 4, 1, 1, 1, 1, 2, 2, 2, 2, 8, 8, 8, 8 };
   static const uint8 tab3[24] = { 1, 2, 3, 2, 2, 2, 3, 2, 1, 1, 2, 1, 1, 1, 2, 1, 2, 2, 3, 2, 2, 2, 3, 2 };
 
-  if (link_player_handler_state == 23) {  // kPlayerState_PermaBunny
+//bugfix: tempbunny animation steps are wrong due to missing check
+  if (link_player_handler_state == 23 || (enhanced_features0 & kFeatures0_MiscBugFixes && link_player_handler_state == 28)) {  // bunny states
     if (link_animation_steps < 4 && player_on_somaria_platform != 2) {
       if (++link_counter_var1 >= tab2[x]) {
         link_counter_var1 = 0;
@@ -6017,6 +6101,14 @@ void HandleDoorTransitions() {  // 87e901
   link_x_page_movement_delta = 0;
   link_y_page_movement_delta = 0;
 
+  // Using a potion might have changed us into a different module, and the routines
+  // below just increment the submodule value, causing all kinds of havoc.
+  // There's an added return to catch the same behavior a bit up, but this one catches more cases,
+  // at the expense of link already having done his movement, so by returning here we might
+  // miss handling the door causing other kinds of issues.
+  if ((enhanced_features0 & kFeatures0_MiscBugFixes) && !(main_module_index == 7 && submodule_index == 0))
+    return;
+
   if (link_direction_last & 0xC && is_standing_in_doorway == 1) {
     if (link_direction_last & 4) {
       if (((t = link_y_coord + 28) & 0xfc) == 0)
@@ -6059,6 +6151,10 @@ void HandleDoorTransitions() {  // 87e901
 }
 
 void ApplyLinksMovementToCamera() {  // 87e9d3
+  // Sometimes, when using spin attack, this routine will end up getting
+  // called twice in the same frame, which messes up things.
+  g_ApplyLinksMovementToCamera_called = true;
+
   link_y_page_movement_delta = (link_y_coord >> 8) - link_y_coord_safe_return_hi;
   link_x_page_movement_delta = (link_x_coord >> 8) - link_x_coord_safe_return_hi;
 
@@ -6127,13 +6223,8 @@ void Sprite_Dungeon_DrawSinglePushBlock(int j) {  // 87f0d9
   y -= BG2VOFS_copy2 + 1;
   x -= BG2HOFS_copy2;
   uint8 ch = kPushedblock_Char[kPushedBlock_Tab1[pushedblocks_some_index]];
-  if (ch != 0xff) {
-    oam->x = x;
-    oam->y = y;
-    oam->charnum = ch;
-    oam->flags = 0x20;
-    bytewise_extended_oam[oam - oam_buf] = 2;
-  }
+  if (ch != 0xff)
+    SetOamPlain(oam, x, y, ch, 0x20, 2);
 }
 
 void Link_Initialize() {  // 87f13c
@@ -6169,9 +6260,29 @@ void Link_Initialize() {  // 87f13c
   player_on_somaria_platform = 0;
   link_spin_attack_step_counter = 0;
 
-  // This fixes the jump ledge exploration glitch
-  if (enhanced_features0 & kFeatures0_MiscBugFixes)
+  if (enhanced_features0 & kFeatures0_MiscBugFixes) {
+    // If you quit while jumping from a ledge and get hit on a platform you can go under solid layers
     about_to_jump_off_ledge = 0;
+ 
+    // If you use the mirror near a moveable statue you can pull thin air and glitch the camera
+    link_is_near_moveable_statue = 0;
+
+    // If you use the mirror on a conveyor belt you will retain momentum and clip into the entrance wall
+    link_on_conveyor_belt = 0;
+    
+    // bugfix: you use the mirror on ice, you retain momentum
+    link_flag_moving = 0;
+
+    // If you quit in the middle of red armos knight stomp the lumberjack tree will fall on its own
+    bg1_y_offset = bg1_x_offset = 0;
+      //bugfix: if you die in a dungeon as a permabunny and continue, you revert back to link
+      if (!link_item_moon_pearl && savegame_is_darkworld) {
+        link_player_handler_state = kPlayerState_PermaBunny;
+        link_is_bunny = 1;
+        link_is_bunny_mirror = 1;
+        LoadGearPalettes_bunny();
+      }
+  }
 }
 
 void Link_ResetProperties_A() {  // 87f1a3
@@ -6212,6 +6323,11 @@ void Link_ResetProperties_B() {  // 87f1e6
 }
 
 void Link_ResetProperties_C() {  // 87f1fa
+  if (enhanced_features0 & kFeatures0_MiscBugFixes) {
+    // Fix save menu lockout when dying after medallion cast (#126)
+    flag_custom_spell_anim_active = 0;
+  }
+
   tile_action_index = 0;
   state_for_spin_attack = 0;
   step_counter_for_spin_attack = 0;
@@ -6272,7 +6388,7 @@ void SomariaBlock_HandlePlayerInteraction(int k) {  // 88e7e6
   if (!ancilla_H[k]) {
     if (link_auxiliary_state || (link_state_bits & 1) || ancilla_z[k] != 0 && ancilla_z[k] != 0xff || ancilla_K[k] || ancilla_L[k])
       return;
-    if (!(joypad1H_last & 0xf)) {
+    if (!(joypad1H_last & kJoypadH_AnyDir)) {
       ancilla_arr3[k] = 0;
       bitmask_of_dragstate = 0;
       ancilla_A[k] = 255;
@@ -6280,11 +6396,11 @@ void SomariaBlock_HandlePlayerInteraction(int k) {  // 88e7e6
         link_speed_setting = 0;
         return;
       }
-    } else if ((joypad1H_last & 0xf) == ancilla_arr3[k]) {
+    } else if ((joypad1H_last & kJoypadH_AnyDir) == ancilla_arr3[k]) {
       if (link_speed_setting == 18)
         bitmask_of_dragstate |= 0x81;
     } else {
-      ancilla_arr3[k] = (joypad1H_last & 0xf);
+      ancilla_arr3[k] = (joypad1H_last & kJoypadH_AnyDir);
       link_speed_setting = 0;
     }
 
@@ -6296,7 +6412,7 @@ void SomariaBlock_HandlePlayerInteraction(int k) {  // 88e7e6
       uint8 t;
       ancilla_x_vel[k] = 0;
       ancilla_y_vel[k] = 0;
-      ancilla_arr3[k] = t = joypad1H_last & 15;
+      ancilla_arr3[k] = t = joypad1H_last & kJoypadH_AnyDir;
       if (t & 3) {
         ancilla_x_vel[k] = t & 1 ? 16 : -16;
         ancilla_dir[k] = t & 1 ? 3 : 2;
@@ -6460,10 +6576,10 @@ void AncillaAdd_Hookshot(uint8 a, uint8 y) {  // 899b10
 void ResetSomeThingsAfterDeath(uint8 a) {  // 8bffbf
   link_is_in_deep_water = 0;
   link_speed_setting = a;
-  byte_7E03F3 = 0;
+  link_on_conveyor_belt = 0;
   byte_7E0322 = 0;
   flag_is_link_immobilized = 0;
-  overworld_palette_swap_flag = 0;
+  palette_swap_flag = 0;
   player_unk1 = 0;
   link_give_damage = 0;
   link_actual_vel_y = 0;

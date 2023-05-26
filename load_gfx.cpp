@@ -10,8 +10,6 @@
 // Allow this to be overwritten
 uint16 kGlovesColor[2] = {0x52f6, 0x376};
 
-static const uint8 kGraphics_IncrementalVramUpload_Dst[16] = {0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f};
-static const uint8 kGraphics_IncrementalVramUpload_Src[16] = {0x0, 0x2, 0x4, 0x6, 0x8, 0xa, 0xc, 0xe, 0x10, 0x12, 0x14, 0x16, 0x18, 0x1a, 0x1c, 0x1e};
 static const uint16 kPaletteFilteringBits[64] = {
   0xffff, 0xffff, 0xfffe, 0xffff, 0x7fff, 0x7fff, 0x7fdf, 0xfbff, 0x7f7f, 0x7f7f, 0x7df7, 0xefbf, 0x7bdf, 0x7bdf, 0x77bb, 0xddef,
   0x7777, 0x7777, 0x6edd, 0xbb77, 0x6db7, 0x6db7, 0x5b6d, 0xb6db, 0x5b5b, 0x5b5b, 0x56b6, 0xad6b, 0x5555, 0xad6b, 0x5555, 0xaaab,
@@ -325,11 +323,9 @@ static const int8 kGraphicsLoadSp6[20] = {
   -1, -1, -1, -1, -1,
 };
 static const uint8 kMirrorWarp_LoadNext_NmiLoad[15] = {0, 14, 15, 16, 17, 0, 0, 0, 0, 0, 0, 18, 19, 20, 0};
-const uint16 *GetFontPtr() {
-  return kFontData;
-}
+
 static const uint8 *GetCompSpritePtr(int i) {
-  return kSprGfx + *(uint32 *)(kSprGfx + i * 4);
+  return kSprGfx(i).ptr;
 }
 
 void ApplyPaletteFilter_bounce() {
@@ -413,11 +409,10 @@ void EraseTileMaps_normal() {
   EraseTileMaps(0x7f, 0x1ec);
 }
 
-void DecompAndUpload2bpp(uint8 pack) {
+static void DecompAndUpload2bpp(uint16 *vram_ptr, uint8 pack) {
   Decomp_spr(&g_ram[0x14000], pack);
   const uint8 *src = &g_ram[0x14000];
-  for (int i = 0; i < 1024; i++, src += 2)
-    zelda_ppu_write_word(VMDATAL, WORD(src[0]));
+  memcpy(vram_ptr, src, 1024 * sizeof(uint16));
 }
 
 void RecoverPegGFXFromMapping() {
@@ -450,9 +445,7 @@ void EraseTileMaps(uint16 r2, uint16 r0) {  // 808355
 }
 
 void EnableForceBlank() {  // 80893d
-  zelda_ppu_write(INIDISP, 0x80);
   INIDISP_copy = 0x80;
-  zelda_snes_dummy_write(HDMAEN, 0);
   HDMAEN_copy = 0;
 }
 
@@ -763,6 +756,9 @@ void Graphics_IncrementalVRAMUpload() {  // 80deff
   if (incremental_counter_for_vram == 16)
     return;
 
+  static const uint8 kGraphics_IncrementalVramUpload_Dst[16] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f };
+  static const uint8 kGraphics_IncrementalVramUpload_Src[16] = { 0x0, 0x2, 0x4, 0x6, 0x8, 0xa, 0xc, 0xe, 0x10, 0x12, 0x14, 0x16, 0x18, 0x1a, 0x1c, 0x1e };
+
   nmi_update_tilemap_dst = kGraphics_IncrementalVramUpload_Dst[incremental_counter_for_vram];
   nmi_update_tilemap_src = kGraphics_IncrementalVramUpload_Src[incremental_counter_for_vram] << 8;
   incremental_counter_for_vram++;
@@ -816,21 +812,18 @@ void LoadNewSpriteGFXSet() {  // 80e031
 }
 
 void InitializeTilesets() {  // 80e19b
-  zelda_ppu_write(VMAIN, 0x80);
-  zelda_ppu_write_word(VMADDL, 0x4400);
   LoadCommonSprites();
+
   const uint8 *p = kSpriteTilesets[sprite_graphics_index];
   if (p[0]) sprite_gfx_subset_0 = p[0];
   if (p[1]) sprite_gfx_subset_1 = p[1];
   if (p[2]) sprite_gfx_subset_2 = p[2];
   if (p[3]) sprite_gfx_subset_3 = p[3];
 
-  LoadSpriteGraphics(sprite_gfx_subset_0, &g_ram[0x7800]);
-  LoadSpriteGraphics(sprite_gfx_subset_1, &g_ram[0x7e00]);
-  LoadSpriteGraphics(sprite_gfx_subset_2, &g_ram[0x8400]);
-  LoadSpriteGraphics(sprite_gfx_subset_3, &g_ram[0x8a00]);
-
-  zelda_ppu_write_word(VMADDL, 0x2000);
+  LoadSpriteGraphics(&g_zenv.vram[0x5000], sprite_gfx_subset_0, &g_ram[0x7800]);
+  LoadSpriteGraphics(&g_zenv.vram[0x5400], sprite_gfx_subset_1, &g_ram[0x7e00]);
+  LoadSpriteGraphics(&g_zenv.vram[0x5800], sprite_gfx_subset_2, &g_ram[0x8400]);
+  LoadSpriteGraphics(&g_zenv.vram[0x5c00], sprite_gfx_subset_3, &g_ram[0x8a00]);
 
   const uint8 *mt = kMainTilesets[main_tile_theme_index];
   const uint8 *at = kAuxTilesets[aux_tile_theme_index];
@@ -840,53 +833,41 @@ void InitializeTilesets() {  // 80e19b
   aux_bg_subset_2 = at[2] ? at[2] : mt[5];
   aux_bg_subset_3 = at[3] ? at[3] : mt[6];
 
-  LoadBackgroundGraphics(mt[0], 7, &g_ram[0x14000]);
-  LoadBackgroundGraphics(mt[1], 6, &g_ram[0x14000]);
-  LoadBackgroundGraphics(mt[2], 5, &g_ram[0x14000]);
-  LoadBackgroundGraphics(aux_bg_subset_0, 4, &g_ram[0x6000]);
-  LoadBackgroundGraphics(aux_bg_subset_1, 3, &g_ram[0x6600]);
-  LoadBackgroundGraphics(aux_bg_subset_2, 2, &g_ram[0x6c00]);
-  LoadBackgroundGraphics(aux_bg_subset_3, 1, &g_ram[0x7200]);
-  LoadBackgroundGraphics(mt[7], 0, &g_ram[0x14000]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x2000], mt[0], 7, &g_ram[0x14000]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x2400], mt[1], 6, &g_ram[0x14000]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x2800], mt[2], 5, &g_ram[0x14000]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x2c00], aux_bg_subset_0, 4, &g_ram[0x6000]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x3000], aux_bg_subset_1, 3, &g_ram[0x6600]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x3400], aux_bg_subset_2, 2, &g_ram[0x6c00]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x3800], aux_bg_subset_3, 1, &g_ram[0x7200]);
+  LoadBackgroundGraphics(&g_zenv.vram[0x3c00], mt[7], 0, &g_ram[0x14000]);
 }
 
 void LoadDefaultGraphics() {  // 80e2d0
-  zelda_ppu_write(VMAIN, 0x80);
-  zelda_ppu_write_word(VMADDL, 0x4000);
   const uint8 *src = GetCompSpritePtr(0);
 
+  uint16 *vram_ptr = &g_zenv.vram[0x4000];
   uint16 *tmp = (uint16 *)&g_ram[0xbf];
   int num = 64;
   do {
     for (int i = 7; i >= 0; i--, src += 2) {
-      zelda_ppu_write_word(VMDATAL, WORD(src[0]));
+      *vram_ptr++ = WORD(src[0]);
       tmp[i] = src[0] | src[1];
     }
     for (int i = 7; i >= 0; i--, src++) {
-      zelda_ppu_write_word(VMDATAL, src[0] | (src[0] | tmp[i]) << 8);
+      *vram_ptr++ = src[0] | (src[0] | tmp[i]) << 8;
     }
   } while (--num);
 
   // Load 2bpp graphics used for hud
-  zelda_ppu_write_word(VMADDL, 0x7000);
-  DecompAndUpload2bpp(0x6a);
-  DecompAndUpload2bpp(0x6b);
-  DecompAndUpload2bpp(0x69);
+  DecompAndUpload2bpp(&g_zenv.vram[0x7000], 0x6a);
+  DecompAndUpload2bpp(&g_zenv.vram[0x7400], 0x6b);
+  DecompAndUpload2bpp(&g_zenv.vram[0x7800], 0x69);
 }
 
 void Attract_LoadBG3GFX() {  // 80e36d
   // load 2bpp gfx for attract images
-  zelda_ppu_write(VMAIN, 0x80);
-  zelda_ppu_write(VMADDL, 0);
-  zelda_ppu_write(VMADDH, 0x78);
-  DecompAndUpload2bpp(0x67);
-}
-
-void LoadCommonSprites_2() {  // 80e384
-  zelda_ppu_write(VMAIN, 0x80);
-  zelda_ppu_write(VMADDL, 0);
-  zelda_ppu_write(VMADDH, 0x44);
-  LoadCommonSprites();
+  DecompAndUpload2bpp(&g_zenv.vram[0x7800], 0x67);
 }
 
 void Graphics_LoadChrHalfSlot() {  // 80e3fa
@@ -896,9 +877,9 @@ void Graphics_LoadChrHalfSlot() {  // 80e3fa
 
   int8 sp6 = kGraphicsLoadSp6[k - 1];
   if (sp6 >= 0) {
-    palette_sp6 = sp6;
+    palette_sp6r_indoors = sp6;
     if (k == 1) {
-      palette_sp6 = 10;
+      palette_sp6r_indoors = 10;
       overworld_palette_aux_or_main = 0x200;
       Palette_Load_SpriteEnvironment();
       flag_update_cgram_in_nmi++;
@@ -951,75 +932,76 @@ void Graphics_LoadChrHalfSlot() {  // 80e3fa
 }
 
 void TransferFontToVRAM() {  // 80e556
-  zelda_ppu_write(OBSEL, 2);
-  zelda_ppu_write(VMAIN, 0x80);
-  zelda_ppu_write_word(VMADDL, 0x7000);
-  const uint16 *src = GetFontPtr();
-  for (int i = 0; i != 0x800; i++, src++)
-    zelda_ppu_write_word(VMDATAL, *src);
+  memcpy(&g_zenv.vram[0x7000], FindIndexInMemblk(kDialogueFont(0), 0).ptr, 0x800 * sizeof(uint16));
 }
 
-void LoadSpriteGraphics(int gfx_pack, uint8 *decomp_addr) {  // 80e583
-  Decomp_spr(decomp_addr, gfx_pack);
-
-  if (gfx_pack == 0x52 || gfx_pack == 0x53 || gfx_pack == 0x5a || gfx_pack == 0x5b ||
-      gfx_pack == 0x5c || gfx_pack == 0x5e || gfx_pack == 0x5f)
-    Do3To4High(decomp_addr);
-  else
-    Do3To4Low(decomp_addr);
-}
-
-void Do3To4High(const uint8 *decomp_addr) {  // 80e5af
+void Do3To4High(uint16 *vram_ptr, const uint8 *decomp_addr) {  // 80e5af
   for (int j = 0; j < 64; j++) {
     uint16 *t = (uint16 *)&dung_line_ptrs_row0;
     for (int i = 7; i >= 0; i--, decomp_addr += 2) {
       uint16 d = *(uint16 *)decomp_addr;
       t[i] = (d | (d >> 8)) & 0xff;
-      zelda_ppu_write_word(VMDATAL, d);
+      *vram_ptr++ = d;
     }
     for (int i = 7; i >= 0; i--, decomp_addr += 1) {
       uint8 d = *decomp_addr;
-      zelda_ppu_write_word(VMDATAL, d | (t[i] | d) << 8);
+      *vram_ptr++ = d | (t[i] | d) << 8;
     }
   }
 }
 
-void LoadBackgroundGraphics(int gfx_pack, int slot, uint8 *decomp_addr) {  // 80e609
-  Decomp_bg(decomp_addr, gfx_pack);
-  if ((main_tile_theme_index >= 0x20) ? (slot == 7 || slot == 2 || slot == 3 || slot == 4) : (slot >= 4))
-    Do3To4High(decomp_addr);
-  else
-    Do3To4Low(decomp_addr);
-}
-
-void Do3To4Low(const uint8 *decomp_addr) {  // 80e63c
+void Do3To4Low(uint16 *vram_ptr, const uint8 *decomp_addr) {  // 80e63c
   for (int j = 0; j < 64; j++) {
     for (int i = 0; i < 8; i++, decomp_addr += 2)
-      zelda_ppu_write_word(VMDATAL, *(uint16 *)decomp_addr);
+      *vram_ptr++ = *(uint16 *)decomp_addr;
     for (int i = 0; i < 8; i++, decomp_addr += 1)
-      zelda_ppu_write_word(VMDATAL, *decomp_addr);
+      *vram_ptr++ = *decomp_addr;
   }
 }
 
+void LoadSpriteGraphics(uint16 *vram_ptr, int gfx_pack, uint8 *decomp_addr) {  // 80e583
+  Decomp_spr(decomp_addr, gfx_pack);
+  if (gfx_pack == 0x52 || gfx_pack == 0x53 || gfx_pack == 0x5a || gfx_pack == 0x5b ||
+      gfx_pack == 0x5c || gfx_pack == 0x5e || gfx_pack == 0x5f)
+    Do3To4High(vram_ptr, decomp_addr);
+  else
+    Do3To4Low(vram_ptr, decomp_addr);
+}
+
+void LoadBackgroundGraphics(uint16 *vram_ptr, int gfx_pack, int slot, uint8 *decomp_addr) {  // 80e609
+  Decomp_bg(decomp_addr, gfx_pack);
+  if ((main_tile_theme_index >= 0x20) ? (slot == 7 || slot == 2 || slot == 3 || slot == 4) : (slot >= 4))
+    Do3To4High(vram_ptr, decomp_addr);
+  else
+    Do3To4Low(vram_ptr, decomp_addr);
+}
+
 void LoadCommonSprites() {  // 80e6b7
-  Do3To4High(GetCompSpritePtr(misc_sprites_graphics_index));
+  Do3To4High(&g_zenv.vram[0x4400], GetCompSpritePtr(misc_sprites_graphics_index));
   if (main_module_index != 1) {
-    Do3To4Low(GetCompSpritePtr(6));
-    Do3To4Low(GetCompSpritePtr(7));
+    Do3To4Low(&g_zenv.vram[0x4800], GetCompSpritePtr(6));
+    Do3To4Low(&g_zenv.vram[0x4c00], GetCompSpritePtr(7));
   } else {
     // select file
-    LoadSpriteGraphics(94, &g_ram[0x14000]);
-    LoadSpriteGraphics(95, &g_ram[0x14000]);
+    LoadSpriteGraphics(&g_zenv.vram[0x4800], 94, &g_ram[0x14000]);
+    LoadSpriteGraphics(&g_zenv.vram[0x4c00], 95, &g_ram[0x14000]);
   }
 }
 
 int Decomp_spr(uint8 *dst, int gfx) {  // 80e772
-  return Decompress(dst, GetCompSpritePtr(gfx));
+  if (gfx < 12)
+    gfx = 12; // ensure it wont decode bad sheets.
+  MemBlk blk = kSprGfx(gfx);
+  const uint8 *sprite_data = GetCompSpritePtr(gfx);
+  // If the size is not 0x600 then it's compressed
+  if (gfx >= 103 || blk.size != 0x600)
+    return Decompress(dst, blk.ptr);
+  memcpy(dst, blk.ptr, 0x600);
+  return 0x600;
 }
 
 int Decomp_bg(uint8 *dst, int gfx) {  // 80e78f
-  const uint8 *p = kBgGfx + *(uint32 *)(kBgGfx + gfx * 4);
-  return Decompress(dst, p);
+  return Decompress(dst, kBgGfx(gfx).ptr);
 }
 
 int Decompress(uint8 *dst, const uint8 *src) {  // 80e79e
@@ -1503,7 +1485,6 @@ void IrisSpotlight_ConfigureTable() {  // 80f312
 
   if (!spotlight_var2) {
     INIDISP_copy = 0x80;
-    zelda_ppu_write(INIDISP, 0x80);
   } else {
     IrisSpotlight_ResetTable();
   }
@@ -1513,8 +1494,8 @@ void IrisSpotlight_ConfigureTable() {  // 80f312
   if (main_module_index == 7 || main_module_index == 16) {
     if (!player_is_indoors)
       sound_effect_ambient = overworld_music[BYTE(overworld_screen_index)] >> 4;
-    if (buffer_for_playing_songs != 0xff)
-      music_control = buffer_for_playing_songs;
+    if (queued_music_control != 0xff)
+      music_control = queued_music_control;
   }
   main_module_index = saved_module_for_menu;
   if (main_module_index == 6)
@@ -1675,7 +1656,7 @@ void Dungeon_UpdatePegGFXBuffer(int x, int y) {  // 829773
 }
 
 void Dungeon_HandleTranslucencyAndPalette() {  // 82a1e9
-  if (overworld_palette_swap_flag)
+  if (palette_swap_flag)
     Palette_RevertTranslucencySwap();
 
   CGWSEL_copy = 2;
@@ -1709,9 +1690,9 @@ void Dungeon_HandleTranslucencyAndPalette() {  // 82a1e9
   darkening_or_lightening_screen = 2;
   overworld_palette_aux_or_main = 0;
   Palette_Load_DungeonSet();
-  Palette_Load_SpritePal0Left();
-  Palette_Load_SpriteAux1();
-  Palette_Load_SpriteAux2();
+  Palette_Load_Sp0L();
+  Palette_Load_Sp5L();
+  Palette_Load_Sp6L();
   subsubmodule_index += 1;
 }
 
@@ -1723,12 +1704,12 @@ void Overworld_LoadAllPalettes() {  // 82c5b2
   overworld_palette_aux1_bp2to4_hi = 3;
   overworld_palette_aux2_bp5to7_hi = 3;
   overworld_palette_aux3_bp7_lo = 0;
-  palette_sp6 = 5;
-  overworld_palette_sp0 = 11;
-  overworld_palette_swap_flag = 0;
+  palette_sp6r_indoors = 5;
+  palette_sp0l = 11;
+  palette_swap_flag = 0;
   overworld_palette_aux_or_main = 0;
   Palette_BgAndFixedColor_Black();
-  Palette_Load_SpritePal0Left();
+  Palette_Load_Sp0L();
   Palette_Load_SpriteMain();
   Palette_Load_OWBGMain();
   Palette_Load_OWBG1();
@@ -1744,10 +1725,10 @@ void Overworld_LoadAllPalettes() {  // 82c5b2
 void Dungeon_LoadPalettes() {  // 82c630
   overworld_palette_aux_or_main = 0;
   Palette_BgAndFixedColor_Black();
-  Palette_Load_SpritePal0Left();
+  Palette_Load_Sp0L();
   Palette_Load_SpriteMain();
-  Palette_Load_SpriteAux1();
-  Palette_Load_SpriteAux2();
+  Palette_Load_Sp5L();
+  Palette_Load_Sp6L();
   Palette_Load_Sword();
   Palette_Load_Shield();
   Palette_Load_SpriteEnvironment();
@@ -1758,7 +1739,7 @@ void Dungeon_LoadPalettes() {  // 82c630
 }
 
 void Overworld_LoadPalettesInner() {  // 82c65f
-  overworld_pal_unk1 = dung_hdr_palette_1;
+  overworld_pal_unk1 = palette_main_indoors;
   overworld_pal_unk2 = overworld_palette_aux3_bp7_lo;
   overworld_pal_unk3 = byte_7E0AB7;
   darkening_or_lightening_screen = 2;
@@ -1779,13 +1760,13 @@ void Overworld_LoadAreaPalettesEx(uint8 x) {  // 82c6ad
   overworld_palette_aux_or_main &= 0xff;
   Palette_Load_SpriteMain();
   Palette_Load_SpriteEnvironment();
-  Palette_Load_SpriteAux1();
-  Palette_Load_SpriteAux2();
+  Palette_Load_Sp5L();
+  Palette_Load_Sp6L();
   Palette_Load_Sword();
   Palette_Load_Shield();
   Palette_Load_LinkArmorAndGloves();
-  overworld_palette_sp0 = (savegame_is_darkworld & 0x40) ? 3 : 1;
-  Palette_Load_SpritePal0Left();
+  palette_sp0l = (savegame_is_darkworld & 0x40) ? 3 : 1;
+  Palette_Load_Sp0L();
   Palette_Load_HUD();
   Palette_Load_OWBGMain();
 }
@@ -1826,14 +1807,14 @@ void Overworld_LoadPalettes(uint8 bg, uint8 spr) {  // 8ed5a8
 
   d = kOwSprPalInfo + spr * 2;
   if (d[0] >= 0)
-    sprite_aux1_palette = d[0];
+    palette_sp5l = d[0];
   if (d[1] >= 0)
-    sprite_aux2_palette = d[1];
+    palette_sp6l = d[1];
   Palette_Load_OWBG1();
   Palette_Load_OWBG2();
   Palette_Load_OWBG3();
-  Palette_Load_SpriteAux1();
-  Palette_Load_SpriteAux2();
+  Palette_Load_Sp5L();
+  Palette_Load_Sp6L();
 }
 
 void Palette_BgAndFixedColor_Black() {  // 8ed5f4
@@ -1878,7 +1859,7 @@ void Palette_AssertTranslucencySwap() {  // 8ed657
 }
 
 void Palette_SetTranslucencySwap(bool v) {  // 8ed65c
-  overworld_palette_swap_flag = v;
+  palette_swap_flag = v;
   uint16 a, b;
   for (int i = 0; i < 8; i++) {
     a = aux_palette_buffer[i + 0x80];
@@ -1941,11 +1922,12 @@ void Filter_Majorly_Whiten_Bg() {  // 8ed757
 }
 
 uint16 Filter_Majorly_Whiten_Color(uint16 c) {  // 8ed7fe
-  int r = (c & 0x1f) + 14;
+  int amt = (enhanced_features0 & kFeatures0_DimFlashes) ? 3 : 14;
+  int r = (c & 0x1f) + amt;
+  int g = (c & 0x3e0) + (amt << 5);
+  int b = (c & 0x7c00) + (amt << 10);
   if (r > 0x1f) r = 0x1f;
-  int g = (c & 0x3e0) + 0x1c0;
   if (g > 0x3e0) g = 0x3e0;
-  int b = (c & 0x7c00) + 0x3800;
   if (b > 0x7c00) b = 0x7c00;
   return r | g | b;
 }
@@ -1985,35 +1967,64 @@ void Palette_Restore_BG_And_HUD() {  // 8ed8fb
   Palette_Restore_Coldata();
 }
 
-void Palette_Load_SpritePal0Left() {  // 9bec77
-  const uint16 *src = kPalette_SpriteAux3 + overworld_palette_sp0 * 7;
-  Palette_LoadSingle(src, overworld_palette_swap_flag ? 0x1e2 : 0x102, 6);
+/* Summary of sprite palette usage 
+0l: kPalette_SpriteAux3[palette_sp0l]
+0r: kPalette_MiscSprite[7 / 9] or kPalette_DungBgMain[(palette_main_indoors >> 1) * 90]
+1 : common sprites
+2 :      -"-
+3 :      -"-
+4 :      -"-
+5l: palette_sp5l
+5r: link sword/shield
+6l: palette_sp6l
+6r: kPalette_MiscSprite[6 / 8] or kPalette_MiscSprite[palette_sp6r_indoors]
+7 : link armor and gloves
+*/
+
+enum {
+  kPal_sp0l = 0x102,
+  kPal_sp0r = 0x112,
+  kPal_sp1to4 = 0x122,   // This is used for 64 colors, colors switched if in darkworld mode
+  kPal_sp5l = 0x1a2,
+  kPal_Sword = 0x1b2,
+  kPal_Shield = 0x1b8,
+  kPal_sp6l = 0x1c2,
+  kPal_sp6r = 0x1d2,
+  kPal_sp7l = 0x1e2,
+  kPal_sp7r = 0x1f2,
+  kPal_ArmorGloves = 0x1e2,
+  kPal_PalaceMap = 0x182,
+};
+
+void Palette_Load_Sp0L() {  // 9bec77
+  const uint16 *src = kPalette_SpriteAux3 + palette_sp0l * 7;
+  Palette_LoadSingle(src, palette_swap_flag ? kPal_sp7l : kPal_sp0l, 6);
 }
 
 void Palette_Load_SpriteMain() {  // 9bec9e
   const uint16 *src = kPalette_MainSpr + (overworld_screen_index & 0x40 ? 60 : 0);
-  Palette_LoadMultiple(src, 0x122, 14, 3);
+  Palette_LoadMultiple(src, kPal_sp1to4, 14, 3);
 }
 
-void Palette_Load_SpriteAux1() {  // 9becc5
-  const uint16 *src = kPalette_SpriteAux1 + (sprite_aux1_palette) * 7;
-  Palette_LoadSingle(src, 0x1A2, 6);
+void Palette_Load_Sp5L() {  // 9becc5
+  const uint16 *src = kPalette_SpriteAux1 + (palette_sp5l) * 7;
+  Palette_LoadSingle(src, kPal_sp5l, 6);
 }
 
-void Palette_Load_SpriteAux2() {  // 9bece4
-  const uint16 *src = kPalette_SpriteAux1 + (sprite_aux2_palette) * 7;
-  Palette_LoadSingle(src, 0x1C2, 6);
+void Palette_Load_Sp6L() {  // 9bece4
+  const uint16 *src = kPalette_SpriteAux1 + (palette_sp6l) * 7;
+  Palette_LoadSingle(src, kPal_sp6l, 6);
 }
 
 void Palette_Load_Sword() {  // 9bed03
   const uint16 *src = kPalette_Sword + ((int8)link_sword_type > 0 ? link_sword_type - 1 : 0) * 3;  // wtf: zelda reads offset 0xff
-  Palette_LoadMultiple_Arbitrary(src, 0x1b2, 2);
+  Palette_LoadMultiple_Arbitrary(src, kPal_Sword, 2);
   flag_update_cgram_in_nmi += 1;
 }
 
 void Palette_Load_Shield() {  // 9bed29
   const uint16 *src = kPalette_Shield + (link_shield_type ? link_shield_type - 1 : 0) * 4;
-  Palette_LoadMultiple_Arbitrary(src, 0x1b8, 3);
+  Palette_LoadMultiple_Arbitrary(src, kPal_Shield, 3);
   flag_update_cgram_in_nmi += 1;
 }
 
@@ -2024,26 +2035,28 @@ void Palette_Load_SpriteEnvironment() {  // 9bed6e
     Palette_MiscSprite_Outdoors();
 }
 
+// avoid renaming in assets.dat
+#define kPalette_MiscSprite kPalette_MiscSprite_Indoors
+
 void Palette_Load_SpriteEnvironment_Dungeon() {  // 9bed72
-  const uint16 *src = kPalette_MiscSprite_Indoors + palette_sp6 * 7;
-  Palette_LoadSingle(src, 0x1d2, 6);
+  const uint16 *src = kPalette_MiscSprite + palette_sp6r_indoors * 7;
+  Palette_LoadSingle(src, kPal_sp6r, 6);
 }
 
 void Palette_MiscSprite_Outdoors() {  // 9bed91
   int t = (overworld_screen_index & 0x40) ? 9 : 7;
-  const uint16 *src = kPalette_MiscSprite_Indoors + t * 7;
-  Palette_LoadSingle(src, overworld_palette_swap_flag ? 0x1f2 : 0x112, 6);
-  src = kPalette_MiscSprite_Indoors + (t - 1) * 7;
-  Palette_LoadSingle(src, 0x1d2, 6);
+  const uint16 *src = kPalette_MiscSprite + t * 7;
+  Palette_LoadSingle(src, palette_swap_flag ? kPal_sp7r : kPal_sp0r, 6);
+  Palette_LoadSingle(src - 7, kPal_sp6r, 6);
 }
 
 void Palette_Load_DungeonMapSprite() {  // 9beddd
-  Palette_LoadMultiple(kPalette_PalaceMapSpr, 0x182, 6, 2);
+  Palette_LoadMultiple(kPalette_PalaceMapSpr, kPal_PalaceMap, 6, 2);
 }
 
 void Palette_Load_LinkArmorAndGloves() {  // 9bedf9
   const uint16 *src = kPalette_ArmorAndGloves + link_armor * 15;
-  Palette_LoadMultiple_Arbitrary(src, 0x1e2, 14);
+  Palette_LoadMultiple_Arbitrary(src, kPal_ArmorGloves, 14);
   Palette_UpdateGlovesColor();
 }
 
@@ -2063,9 +2076,9 @@ void Palette_Load_HUD() {  // 9bee52
 }
 
 void Palette_Load_DungeonSet() {  // 9bee74
-  const uint16 *src = kPalette_DungBgMain + (dung_hdr_palette_1 >> 1) * 90;
+  const uint16 *src = kPalette_DungBgMain + (palette_main_indoors >> 1) * 90;
   Palette_LoadMultiple(src, 0x42, 14, 5);
-  Palette_LoadSingle(src, overworld_palette_swap_flag ? 0x1f2 : 0x112, 6);
+  Palette_LoadSingle(src, palette_swap_flag ? kPal_sp7r : kPal_sp0r, 6);
 }
 
 void Palette_Load_OWBG3() {  // 9beea8

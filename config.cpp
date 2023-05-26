@@ -4,7 +4,7 @@
 #include <string.h>
 #include <SDL.h>
 #include "features.h"
-
+#include "util.h"
 
 enum {
   kKeyMod_ScanCode = 0x200,
@@ -22,6 +22,7 @@ Config g_config;
 #define C(x) REMAP_SDL_KEYCODE(x) | kKeyMod_Ctrl
 #define N 0
 static const uint16 kDefaultKbdControls[kKeys_Total] = {
+  0,
   // Controls
   _(SDLK_UP), _(SDLK_DOWN), _(SDLK_LEFT), _(SDLK_RIGHT), _(SDLK_RSHIFT), _(SDLK_RETURN), _(SDLK_x), _(SDLK_z), _(SDLK_s), _(SDLK_a), _(SDLK_c), _(SDLK_v),
   // LoadState
@@ -31,9 +32,9 @@ static const uint16 kDefaultKbdControls[kKeys_Total] = {
   // Replay State
   C(SDLK_F1), C(SDLK_F2), C(SDLK_F3), C(SDLK_F4), C(SDLK_F5), C(SDLK_F6), C(SDLK_F7), C(SDLK_F8), C(SDLK_F9), C(SDLK_F10), N, N, N, N, N, N, N, N, N, N,
   // Load Ref State
-  _(SDLK_1), _(SDLK_2), _(SDLK_3), _(SDLK_4), _(SDLK_5), _(SDLK_6), _(SDLK_7), _(SDLK_8), _(SDLK_9), _(SDLK_0), _(SDLK_MINUS), _(SDLK_EQUALS), _(SDLK_BACKSPACE), N, N, N, N, N, N, N,
+  N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N,
   // Replay Ref State
-  C(SDLK_1), C(SDLK_2), C(SDLK_3), C(SDLK_4), C(SDLK_5), C(SDLK_6), C(SDLK_7), C(SDLK_8), C(SDLK_9), C(SDLK_0), C(SDLK_MINUS), C(SDLK_EQUALS), C(SDLK_BACKSPACE), N, N, N, N, N, N, N,
+  N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N,
   // CheatLife, CheatKeys, CheatEquipment, CheatWalkThroughWalls
   _(SDLK_w), _(SDLK_o), S(SDLK_w), C(SDLK_e),
   // ClearKeyLog, StopReplay, Fullscreen, Reset, Pause, PauseDimmed, Turbo, ReplayTurbo, WindowBigger, WindowSmaller, DisplayPerf, ToggleRenderer
@@ -53,10 +54,11 @@ typedef struct KeyNameId {
 #define M(n) {#n, kKeys_##n, kKeys_##n##_Last - kKeys_##n + 1}
 #define S(n) {#n, kKeys_##n, 1}
 static const KeyNameId kKeyNameId[] = {
+  {"Null", kKeys_Null, 65535},
   M(Controls), M(Load), M(Save), M(Replay), M(LoadRef), M(ReplayRef),
   S(CheatLife), S(CheatKeys), S(CheatEquipment), S(CheatWalkThroughWalls),
   S(ClearKeyLog), S(StopReplay), S(Fullscreen), S(Reset),
-  S(Pause), S(PauseDimmed), S(Turbo), S(ReplayTurbo), S(WindowBigger), S(WindowSmaller), S(DisplayPerf), S(ToggleRenderer),
+  S(Pause), S(PauseDimmed), S(Turbo), S(ReplayTurbo), S(WindowBigger), S(WindowSmaller), S(VolumeUp), S(VolumeDown), S(DisplayPerf), S(ToggleRenderer),
 };
 #undef S
 #undef M
@@ -69,7 +71,7 @@ static KeyMapHashEnt *keymap_hash;
 static int keymap_hash_size;
 static bool has_keynameid[countof(kKeyNameId)];
 
-bool KeyMapHash_Add(uint16 key, uint16 cmd) {
+static bool KeyMapHash_Add(uint16 key, uint16 cmd) {
   if ((keymap_hash_size & 0xff) == 0) {
     if (keymap_hash_size > 10000)
       Die("Too many keys");
@@ -101,58 +103,27 @@ static int KeyMapHash_Find(uint16 key) {
       return ent->cmd;
     i = ent->next;
   }
-  return -1;
+  return 0;
 }
 
 int FindCmdForSdlKey(SDL_Keycode code, SDL_Keymod mod) {
   if (code & ~(SDLK_SCANCODE_MASK | 0x1ff))
-    return -1;
-  int key = mod & KMOD_ALT ? kKeyMod_Alt : 0;
-  key |= mod & KMOD_CTRL ? kKeyMod_Ctrl : 0;
-  key |= mod & KMOD_SHIFT ? kKeyMod_Shift : 0;
+    return 0;
+  int key = 0;
+  if (code != SDLK_LALT && code != SDLK_RALT)
+    key |=  mod & KMOD_ALT ? kKeyMod_Alt : 0;
+  if (code != SDLK_LCTRL && code != SDLK_RCTRL)
+    key |= mod & KMOD_CTRL ? kKeyMod_Ctrl : 0;
+  if (code != SDLK_LSHIFT && code != SDLK_RSHIFT)
+    key |= mod & KMOD_SHIFT ? kKeyMod_Shift : 0;
   key |= REMAP_SDL_KEYCODE(code);
   return KeyMapHash_Find(key);
-}
-
-static char *NextDelim(char **s, int sep) {
-  char *r = *s;
-  if (r) {
-    while (r[0] == ' ' || r[0] == '\t')
-      r++;
-    char *t = strchr(r, sep);
-    *s = t ? (*t++ = 0, t) : NULL;
-  }
-  return r;
-}
-
-static inline int ToLower(int a) {
-  return a + (a >= 'A' && a <= 'Z') * 32;
-}
-
-static bool StringEqualsNoCase(const char *a, const char *b) {
-  for (;;) {
-    int aa = ToLower(*a++), bb = ToLower(*b++);
-    if (aa != bb)
-      return false;
-    if (aa == 0)
-      return true;
-  }
-}
-
-static bool StringStartsWithNoCase(const char *a, const char *b) {
-  for (;;) {
-    int aa = ToLower(*a++), bb = ToLower(*b++);
-    if (bb == 0)
-      return true;
-    if (aa != bb)
-      return false;
-  }
 }
 
 static void ParseKeyArray(char *value, int cmd, int size) {
   char *s;
   int i = 0;
-  for (; i < size && (s = NextDelim(&value, ',')) != NULL; i++, cmd++) {
+  for (; i < size && (s = NextDelim(&value, ',')) != NULL; i++, cmd += (cmd != 0)) {
     if (*s == 0)
       continue;
     int key_with_mod = 0;
@@ -177,17 +148,121 @@ static void ParseKeyArray(char *value, int cmd, int size) {
   }
 }
 
+typedef struct GamepadMapEnt {
+  uint32 modifiers;
+  uint16 cmd, next;
+} GamepadMapEnt;
+
+static uint16 joymap_first[kGamepadBtn_Count];
+static GamepadMapEnt *joymap_ents;
+static int joymap_size;
+static bool has_joypad_controls;
+
+static int CountBits32(uint32 n) {
+  int count = 0;
+  for (; n != 0; count++)
+    n &= (n - 1);
+  return count;
+}
+
+static void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd) {
+  if ((joymap_size & 0xff) == 0) {
+    if (joymap_size > 1000)
+      Die("Too many joypad keys");
+    joymap_ents = realloc(joymap_ents, sizeof(GamepadMapEnt) * (joymap_size + 64));
+    if (!joymap_ents) Die("realloc failure");
+  }
+  uint16 *p = &joymap_first[button];
+  // Insert it as early as possible but before after any entry with more modifiers.
+  int cb = CountBits32(modifiers);
+  while (*p && cb < CountBits32(joymap_ents[*p - 1].modifiers))
+    p = &joymap_ents[*p - 1].next;
+  int i = joymap_size++;
+  GamepadMapEnt *ent = &joymap_ents[i];
+  ent->modifiers = modifiers;
+  ent->cmd = cmd;
+  ent->next = *p;
+  *p = i + 1;
+}
+
+int FindCmdForGamepadButton(int button, uint32 modifiers) {
+  GamepadMapEnt *ent;
+  for(int e = joymap_first[button]; e != 0; e = ent->next) {
+    ent = &joymap_ents[e - 1];
+    if ((modifiers & ent->modifiers) == ent->modifiers)
+      return ent->cmd;
+  }
+  return 0;
+}
+
+static int ParseGamepadButtonName(const char **value) {
+  const char *s = *value;
+  // Longest substring first
+  static const char *const kGamepadKeyNames[] = {
+    "Back", "Guide", "Start", "L3", "R3",
+    "L1", "R1", "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "L2", "R2",
+    "Lb", "Rb", "A", "B", "X", "Y"
+  };
+  static const uint8 kGamepadKeyIds[] = {
+    kGamepadBtn_Back, kGamepadBtn_Guide, kGamepadBtn_Start, kGamepadBtn_L3, kGamepadBtn_R3,
+    kGamepadBtn_L1, kGamepadBtn_R1, kGamepadBtn_DpadUp, kGamepadBtn_DpadDown, kGamepadBtn_DpadLeft, kGamepadBtn_DpadRight, kGamepadBtn_L2, kGamepadBtn_R2,
+    kGamepadBtn_L1, kGamepadBtn_R1, kGamepadBtn_A, kGamepadBtn_B, kGamepadBtn_X, kGamepadBtn_Y,
+  };
+  for (size_t i = 0; i != countof(kGamepadKeyNames); i++) {
+    const char *r = StringStartsWithNoCase(s, kGamepadKeyNames[i]);
+    if (r) {
+      *value = r;
+      return kGamepadKeyIds[i];
+    }
+  }
+  return kGamepadBtn_Invalid;
+}
+
+static const uint8 kDefaultGamepadCmds[] = {
+  kGamepadBtn_DpadUp, kGamepadBtn_DpadDown, kGamepadBtn_DpadLeft, kGamepadBtn_DpadRight, kGamepadBtn_Back, kGamepadBtn_Start,
+  kGamepadBtn_B, kGamepadBtn_A, kGamepadBtn_Y, kGamepadBtn_X, kGamepadBtn_L1, kGamepadBtn_R1,
+};
+
+static void ParseGamepadArray(char *value, int cmd, int size) {
+  char *s;
+  int i = 0;
+  for (; i < size && (s = NextDelim(&value, ',')) != NULL; i++, cmd += (cmd != 0)) {
+    if (*s == 0)
+      continue;
+    uint32 modifiers = 0;
+    const char *ss = s;
+    for (;;) {
+      int button = ParseGamepadButtonName(&ss);
+      if (button == kGamepadBtn_Invalid) BAD: {
+        fprintf(stderr, "Unknown gamepad button: '%s'\n", s);
+        break;
+      }
+      while (*ss == ' ' || *ss == '\t') ss++;
+      if (*ss == '+') {
+        ss++;
+        modifiers |= 1 << button;
+      } else if (*ss == 0) {
+        GamepadMap_Add(button, modifiers, cmd);
+        break;
+      } else
+        goto BAD;
+    }
+  }
+}
 
 static void RegisterDefaultKeys() {
-  for (int i = 0; i < countof(kKeyNameId); i++) {
+  for (int i = 1; i < countof(kKeyNameId); i++) {
     if (!has_keynameid[i]) {
       int size = kKeyNameId[i].size, k = kKeyNameId[i].id;
       for (int j = 0; j < size; j++, k++)
         KeyMapHash_Add(kDefaultKbdControls[k], k);
     }
   }
+  if (!has_joypad_controls) {
+    for (int i = 0; i < countof(kDefaultGamepadCmds); i++)
+      GamepadMap_Add(kDefaultGamepadCmds[i], 0, kKeys_Controls + i);
+  }
 }
-
 
 static int GetIniSection(const char *s) {
   if (StringEqualsNoCase(s, "[KeyMap]"))
@@ -200,18 +275,31 @@ static int GetIniSection(const char *s) {
     return 3;
   if (StringEqualsNoCase(s, "[Features]"))
     return 4;
+  if (StringEqualsNoCase(s, "[GamepadMap]"))
+    return 5;
   return -1;
 }
 
-static bool ParseBool(const char *value, bool *result) {
-  if (StringEqualsNoCase(value, "0") || StringEqualsNoCase(value, "false")) {
-    *result = false;
-    return true;
-  } else if (StringEqualsNoCase(value, "1") || StringEqualsNoCase(value, "true")) {
-    *result = true;
+bool ParseBool(const char *value, bool *result) {
+  bool rv = false;
+  switch (*value++ | 32) {
+  case '0': if (*value == 0) break; return false;
+  case 'f': if (StringEqualsNoCase(value, "alse")) break; return false;
+  case 'n': if (StringEqualsNoCase(value, "o")) break; return false;
+  case 'o':
+    rv = (*value | 32) == 'n';
+    if (StringEqualsNoCase(value, rv ? "n" : "ff")) break;
+    return false;
+  case '1': rv = true; if (*value == 0) break; return false;
+  case 'y': rv = true; if (StringEqualsNoCase(value, "es")) break; return false;
+  case 't': rv = true; if (StringEqualsNoCase(value, "rue")) break; return false;
+  default: return false;
+  }
+  if (result) {
+    *result = rv;
     return true;
   }
-  return false;
+  return rv;
 }
 
 static bool ParseBoolBit(const char *value, uint32 *data, uint32 mask) {
@@ -231,8 +319,32 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
         return true;
       }
     }
+  } else if (section == 5) {
+    for (int i = 0; i < countof(kKeyNameId); i++) {
+      if (StringEqualsNoCase(key, kKeyNameId[i].name)) {
+        if (i == 1)
+          has_joypad_controls = true;
+        ParseGamepadArray(value, kKeyNameId[i].id, kKeyNameId[i].size);
+        return true;
+      }
+    }
   } else if (section == 1) {
-    if (StringEqualsNoCase(key, "EnhancedMode7")) {
+    if (StringEqualsNoCase(key, "WindowSize")) {
+      char *s;
+      if (StringEqualsNoCase(value, "Auto")){
+        g_config.window_width  = 0;
+        g_config.window_height = 0;
+        return true;
+      }
+      while ((s = NextDelim(&value, 'x')) != NULL) {
+        if(g_config.window_width == 0) {
+          g_config.window_width = atoi(s);
+        } else {
+          g_config.window_height = atoi(s);
+          return true;
+        }
+      }
+    } else if (StringEqualsNoCase(key, "EnhancedMode7")) {
       return ParseBool(value, &g_config.enhanced_mode7);
     } else if (StringEqualsNoCase(key, "NewRenderer")) {
       return ParseBool(value, &g_config.new_renderer);
@@ -244,11 +356,24 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     } else if (StringEqualsNoCase(key, "WindowScale")) {
       g_config.window_scale = (uint8)strtol(value, (char**)NULL, 10);
       return true;
+    } else if (StringEqualsNoCase(key, "OutputMethod")) {
+      g_config.output_method = StringEqualsNoCase(value, "SDL-Software") ? kOutputMethod_SDLSoftware :
+                               StringEqualsNoCase(value, "OpenGL") ? kOutputMethod_OpenGL : 
+                               StringEqualsNoCase(value, "OpenGL ES") ? kOutputMethod_OpenGL_ES :
+                                                                        kOutputMethod_SDL;
+      return true;
+    } else if (StringEqualsNoCase(key, "LinearFiltering")) {
+      return ParseBool(value, &g_config.linear_filtering);
     } else if (StringEqualsNoCase(key, "NoSpriteLimits")) {
       return ParseBool(value, &g_config.no_sprite_limits);
     } else if (StringEqualsNoCase(key, "LinkGraphics")) {
       g_config.link_graphics = value;
       return true;
+    } else if (StringEqualsNoCase(key, "Shader")) {
+      g_config.shader = *value ? value : NULL;
+      return true;
+    } else if (StringEqualsNoCase(key, "DimFlashes")) {
+      return ParseBoolBit(value, &g_config.features0, kFeatures0_DimFlashes);
     }
   } else if (section == 2) {
     if (StringEqualsNoCase(key, "EnableAudio")) {
@@ -263,7 +388,23 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       g_config.audio_samples = (uint16)strtol(value, (char**)NULL, 10);
       return true;
     } else if (StringEqualsNoCase(key, "EnableMSU")) {
-      return ParseBool(value, &g_config.enable_msu);
+        if (StringEqualsNoCase(value, "opuz"))
+        g_config.enable_msu = kMsuEnabled_Opuz;
+      else if (StringEqualsNoCase(value, "deluxe"))
+        g_config.enable_msu = kMsuEnabled_MsuDeluxe;
+      else if (StringEqualsNoCase(value, "deluxe-opuz"))
+        g_config.enable_msu = kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz;
+      else 
+        return ParseBool(value, (bool*)&g_config.enable_msu);
+      return true;
+    } else if (StringEqualsNoCase(key, "MSUPath")) {
+      g_config.msu_path = value;
+      return true;
+    } else if (StringEqualsNoCase(key, "MSUVolume")) {
+      g_config.msuvolume = atoi(value);
+      return true;
+    } else if (StringEqualsNoCase(key, "ResumeMSU")) {
+      return ParseBool(value, &g_config.resume_msu);
     }
   } else if (section == 3) {
     if (StringEqualsNoCase(key, "Autosave")) {
@@ -299,10 +440,17 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return true;
     } else if (StringEqualsNoCase(key, "DisplayPerfInTitle")) {
       return ParseBool(value, &g_config.display_perf_title);
+    } else if (StringEqualsNoCase(key, "DisableFrameDelay")) {
+      return ParseBool(value, &g_config.disable_frame_delay);
+    } else if (StringEqualsNoCase(key, "Language")) {
+      g_config.language = value;
+      return true;
     }
   } else if (section == 4) {
     if (StringEqualsNoCase(key, "ItemSwitchLR")) {
       return ParseBoolBit(value, &g_config.features0, kFeatures0_SwitchLR);
+    } else if (StringEqualsNoCase(key, "ItemSwitchLRLimit")) {
+      return ParseBoolBit(value, &g_config.features0, kFeatures0_SwitchLRLimit);
     } else if (StringEqualsNoCase(key, "TurnWhileDashing")) {
       return ParseBoolBit(value, &g_config.features0, kFeatures0_TurnWhileDashing);
     } else if (StringEqualsNoCase(key, "MirrorToDarkworld")) {
@@ -332,79 +480,50 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
   return false;
 }
 
-
-uint8 *ReadFile(const char *name, size_t *length) {
-  FILE *f = fopen(name, "rb");
-  if (f == NULL)
-    return NULL;
-  fseek(f, 0, SEEK_END);
-  size_t size = ftell(f);
-  rewind(f);
-  uint8 *buffer = (uint8 *)malloc(size + 1);
-  if (!buffer) Die("malloc failed");
-  // Always zero terminate so this function can be used also for strings.
-  buffer[size] = 0;
-  if (fread(buffer, 1, size, f) != size)
-    Die("fread failed");
-  fclose(f);
-  if (length) *length = size;
-  return buffer;
-}
-
-void ParseConfigFile() {
-  uint8 *file = ReadFile("zelda3.user.ini", NULL);
-  if (!file) {
-    file = ReadFile("zelda3.ini", NULL);
-    if (!file)
-      return;
-  }
-  fprintf(stderr, "Loading zelda3.ini\n");
+static bool ParseOneConfigFile(const char *filename, int depth) {
+  char *filedata = (char*)ReadWholeFile(filename, NULL), *p;
+  if (!filedata)
+    return false;
+  
   int section = -2;
-  int lineno = 1;
-  char *p, *next_p = (char*)file;
-  for (; (p = next_p) != NULL; lineno++) {
-    // find end of line
-    char *eol = strchr(p, '\n');
-    next_p = eol ? eol + 1 : NULL;
-    eol = eol ? eol : p + strlen(p);
-    // strip comments
-    char *comment = static_cast<char *>(memchr(p, '#', eol - p));
-    eol = (comment != 0) ? comment : eol;
-    // strip trailing whitespace
-    while (eol > p && (eol[-1] == '\r' || eol[-1] == ' ' || eol[-1] == '\t'))
-      eol--;
-    *eol = 0;
-    if (p == eol)
+  g_config.memory_buffer = filedata;
+
+  for (int lineno = 1; (p = NextLineStripComments(&filedata)) != NULL; lineno++) {
+    if (*p == 0)
       continue; // empty line
-    // strip leading whitespace
-    while (p[0] == ' ' || p[0] == '\t')
-      p++;
     if (*p == '[') {
       section = GetIniSection(p);
       if (section < 0)
-        fprintf(stderr, "zelda3.ini:%d: Invalid .ini section %s\n", lineno, p);
+        fprintf(stderr, "%s:%d: Invalid .ini section %s\n", filename, lineno, p);
+    } else if (*p == '!' && SkipPrefix(p + 1, "include ")) {
+      char *tt = p + 8;
+      char *new_filename = ReplaceFilenameWithNewPath(filename, NextPossiblyQuotedString(&tt));
+      if (depth > 10 || !ParseOneConfigFile(new_filename, depth + 1))
+        fprintf(stderr, "Warning: Unable to read %s\n", new_filename);
+      free(new_filename);
     } else if (section == -2) {
-      fprintf(stderr, "zelda3.ini:%d: Expecting [section]\n", lineno);
+      fprintf(stderr, "%s:%d: Expecting [section]\n", filename, lineno);
     } else {
-      char *equals = static_cast<char *>(memchr(p, '=', eol - p));
-      if (equals == NULL) {
-        fprintf(stderr, "zelda3.ini:%d: Expecting 'key=value'\n", lineno);
-      } else {
-        char *kr = equals;
-        while (kr > p && (kr[-1] == ' ' || kr[-1] == '\t'))
-          kr--;
-        *kr = 0;
-        char *v = equals + 1;
-        while (v[0] == ' ' || v[0] == '\t')
-          v++;
-        if (section >= 0 && !HandleIniConfig(section, p, v))
-          fprintf(stderr, "zelda3.ini:%d: Can't parse '%s'\n", lineno, p);
+      char *v = SplitKeyValue(p);
+      if (v == NULL) {
+        fprintf(stderr, "%s:%d: Expecting 'key=value'\n", filename, lineno);
+        continue;
       }
+      if (section >= 0 && !HandleIniConfig(section, p, v))
+        fprintf(stderr, "%s:%d: Can't parse '%s'\n", filename, lineno, p);
     }
   }
-  g_config.memory_buffer = file;
+  return true;
 }
 
-void AfterConfigParse() {
+void ParseConfigFile(const char *filename) {
+  g_config.msuvolume = 100;  // default msu volume, 100%
+
+  if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
+    if (filename == NULL)
+      filename = "zelda3.ini";
+    if (!ParseOneConfigFile(filename, 0))
+      fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
+  }
   RegisterDefaultKeys();
 }

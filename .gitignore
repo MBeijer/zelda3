@@ -24,9 +24,12 @@ __pycache__
 /*.exe
 /*.out
 /snes/*.o
-/msu/alttp_msu-*.pcm
+/msu/
 /tmp/
 /tables/zelda3_assets.dat
-/third_party/tcc/
-/third_party/SDL2-2.24.0/
 /SDL2.dll
+/zelda3.*.ini
+/zelda3.wiki
+/sprites-gfx
+/glsl-shaders
+/token.txt

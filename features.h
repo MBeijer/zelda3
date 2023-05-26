@@ -42,17 +42,24 @@ enum {
   kFeatures0_CancelBirdTravel = 8192,
 
   kFeatures0_GameChangingBugFixes = 16384,
+
+  kFeatures0_SwitchLRLimit = 32768,
+
+  kFeatures0_DimFlashes = 65536,
 };
 
 #define enhanced_features0 (*(uint32*)(g_ram+0x64c))
 #define msu_curr_sample (*(uint32*)(g_ram+0x650))
 #define msu_volume (*(uint8*)(g_ram+0x654))
 #define msu_track (*(uint8*)(g_ram+0x655))
-#define hud_cur_item_x (*(uint8*)(g_ram+0x656))
 #define hud_inventory_order ((uint8*)(g_ram + 0x225)) // 4x6 bytes
+#define hud_cur_item_x (*(uint8*)(g_ram+0x656))
+#define hud_cur_item_l (*(uint8*)(g_ram+0x657))
+#define hud_cur_item_r (*(uint8*)(g_ram+0x658))
+
+
 
 extern uint32 g_wanted_zelda_features;
-extern bool msu_enabled;
 
 
 #endif  // ZELDA3_FEATURES_H_

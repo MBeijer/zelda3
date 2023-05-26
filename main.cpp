@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <SDL.h>
 #ifdef _WIN32
+#include "platform/win32/volume_control.h"
 #include <direct.h>
 #else
 #include <sys/stat.h>
@@ -23,22 +24,27 @@
 #include "config.h"
 #include "assets.h"
 #include "load_gfx.h"
+#include "util.h"
+#include "audio.h"
 
+static bool g_run_without_emu = 0;
 
 // Forwards
 static bool LoadRom(const char *filename);
 static void LoadLinkGraphics();
-static void PlayAudio(SDL_AudioDeviceID device, int channels, int16 *audioBuffer);
-static void RenderScreen(SDL_Window *window, SDL_Renderer *renderer, SDL_Texture *texture, bool fullscreen);
+static void RenderNumber(uint8 *dst, size_t pitch, int n, bool big);
 static void HandleInput(int keyCode, int modCode, bool pressed);
+static void HandleCommand(uint32 j, bool pressed);
+static int RemapSdlButton(int button);
 static void HandleGamepadInput(int button, bool pressed);
 static void HandleGamepadAxisInput(int gamepad_id, int axis, int value);
 static void OpenOneGamepad(int i);
+static void HandleVolumeAdjustment(int volume_adjustment);
 static void LoadAssets();
+static void SwitchDirectory();
 
 enum {
   kDefaultFullscreen = 0,
-  kDefaultWindowScale = 2,
   kMaxWindowScale = 10,
   kDefaultFreq = 44100,
   kDefaultChannels = 2,
@@ -46,10 +52,9 @@ enum {
 };
 
 static const char kWindowTitle[] = "The Legend of Zelda: A Link to the Past";
-
 static uint32 g_win_flags = SDL_WINDOW_RESIZABLE;
 static SDL_Window *g_window;
-static SDL_Renderer *g_renderer;
+
 static uint8 g_paused, g_turbo, g_replay_turbo = true, g_cursor = true;
 static uint8 g_current_window_scale;
 static uint8 g_gamepad_buttons;
@@ -57,25 +62,23 @@ static int g_input1_state;
 static bool g_display_perf;
 static int g_curr_fps;
 static int g_ppu_render_flags = 0;
-static bool g_run_without_emu = false;
 static int g_snes_width, g_snes_height;
+static int g_sdl_audio_mixer_volume = SDL_MIX_MAXVOLUME;
+static struct RendererFuncs g_renderer_funcs;
+static uint32 g_gamepad_modifiers;
+static uint16 g_gamepad_last_cmd[kGamepadBtn_Count];
 
 void NORETURN Die(const char *error) {
+#if defined(NDEBUG) && defined(_WIN32)
+  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, kWindowTitle, error, NULL);
+#endif
   fprintf(stderr, "Error: %s\n", error);
   exit(1);
 }
 
-void SetButtonState(int button, bool pressed) {
-  // set key in constroller
-  if (pressed) {
-    g_input1_state |= 1 << button;
-  } else {
-    g_input1_state &= ~(1 << button);
-  }
-}
-
-
 void ChangeWindowScale(int scale_step) {
+  if ((SDL_GetWindowFlags(g_window) & (SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_MAXIMIZED)) != 0)
+    return;
   int screen = SDL_GetWindowDisplayIndex(g_window);
   if (screen < 0) screen = 0;
   int max_scale = kMaxWindowScale;
@@ -90,14 +93,14 @@ void ChangeWindowScale(int scale_step) {
       bt = 31;
     }
     // Allow a scale level slightly above the max that fits on screen
-    int mw = (bounds.w - bl - br + (g_snes_width / kDefaultWindowScale) / 4) / (g_snes_width / kDefaultWindowScale);
-    int mh = (bounds.h - bt - bb + (g_snes_height / kDefaultWindowScale) / 4) / (g_snes_height / kDefaultWindowScale);
+    int mw = (bounds.w - bl - br + g_snes_width / 4) / g_snes_width;
+    int mh = (bounds.h - bt - bb + g_snes_height / 4) / g_snes_height;
     max_scale = IntMin(mw, mh);
   }
   int new_scale = IntMax(IntMin(g_current_window_scale + scale_step, max_scale), 1);
   g_current_window_scale = new_scale;
-  int w = new_scale * (g_snes_width / kDefaultWindowScale);
-  int h = new_scale * (g_snes_height / kDefaultWindowScale);
+  int w = new_scale * g_snes_width;
+  int h = new_scale * g_snes_height;
 
   //SDL_RenderSetLogicalSize(g_renderer, w, h);
   SDL_SetWindowSize(g_window, w, h);
@@ -113,19 +116,47 @@ void ChangeWindowScale(int scale_step) {
   }
 }
 
-static SDL_HitTestResult HitTestCallback(SDL_Window *win, const SDL_Point *area, void *data) {
+#define RESIZE_BORDER 20
+static SDL_HitTestResult HitTestCallback(SDL_Window *win, const SDL_Point *pt, void *data) {
   uint32 flags = SDL_GetWindowFlags(win);
-  return ((flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == 0 || (flags & SDL_WINDOW_FULLSCREEN) == 0) &&
-         (SDL_GetModState() & KMOD_CTRL) != 0 ? SDL_HITTEST_DRAGGABLE : SDL_HITTEST_NORMAL;
+  if ((flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0 || (flags & SDL_WINDOW_FULLSCREEN) != 0)
+    return SDL_HITTEST_NORMAL;
+
+  if ((SDL_GetModState() & KMOD_CTRL) != 0)
+    return SDL_HITTEST_DRAGGABLE;
+
+  int w, h;
+  SDL_GetWindowSize(win, &w, &h);
+
+  if (pt->y < RESIZE_BORDER) {
+    return (pt->x < RESIZE_BORDER) ? SDL_HITTEST_RESIZE_TOPLEFT :
+           (pt->x >= w - RESIZE_BORDER) ? SDL_HITTEST_RESIZE_TOPRIGHT : SDL_HITTEST_RESIZE_TOP;
+  } else if (pt->y >= h - RESIZE_BORDER) {
+    return (pt->x < RESIZE_BORDER) ? SDL_HITTEST_RESIZE_BOTTOMLEFT :
+           (pt->x >= w - RESIZE_BORDER) ? SDL_HITTEST_RESIZE_BOTTOMRIGHT : SDL_HITTEST_RESIZE_BOTTOM;
+  } else {
+    if (pt->x < RESIZE_BORDER) {
+      return SDL_HITTEST_RESIZE_LEFT;
+    } else if (pt->x >= w - RESIZE_BORDER) {
+      return SDL_HITTEST_RESIZE_RIGHT;
+    }
+  }
+  return SDL_HITTEST_NORMAL;
 }
 
-static bool RenderScreenWithPerf(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
-  bool rv;
+static void DrawPpuFrameWithPerf() {
+  int render_scale = PpuGetCurrentRenderScale(g_zenv.ppu, g_ppu_render_flags);
+  uint8 *pixel_buffer = 0;
+  int pitch = 0;
+
+  g_renderer_funcs.BeginDraw(g_snes_width * render_scale,
+                             g_snes_height * render_scale,
+                             &pixel_buffer, &pitch);
   if (g_display_perf || g_config.display_perf_title) {
     static float history[64], average;
     static int history_pos;
     uint64 before = SDL_GetPerformanceCounter();
-    rv = ZeldaDrawPpuFrame(pixel_buffer, pitch, render_flags);
+    ZeldaDrawPpuFrame(pixel_buffer, pitch, g_ppu_render_flags);
     uint64 after = SDL_GetPerformanceCounter();
     float v = (double)SDL_GetPerformanceFrequency() / (after - before);
     average += v - history[history_pos];
@@ -133,34 +164,11 @@ static bool RenderScreenWithPerf(uint8 *pixel_buffer, size_t pitch, uint32 rende
     history_pos = (history_pos + 1) & 63;
     g_curr_fps = average * (1.0f / 64);
   } else {
-    rv = ZeldaDrawPpuFrame(pixel_buffer, pitch, render_flags);
+    ZeldaDrawPpuFrame(pixel_buffer, pitch, g_ppu_render_flags);
   }
-  return rv;
-}
-
-// Go some steps up and find zelda3.ini
-static void SwitchDirectory() {
-  char buf[4096];
-  if (!getcwd(buf, sizeof(buf) - 32))
-    return;
-  size_t pos = strlen(buf);
-
-  for (int step = 0; pos != 0 && step < 3; step++) {
-    memcpy(buf + pos, "/zelda3.ini", 12);
-    FILE *f = fopen(buf, "rb");
-    if (f) {
-      fclose(f);
-      buf[pos] = 0;
-      if (step != 0) {
-        printf("Found zelda3.ini in %s\n", buf);
-        chdir(buf);
-      }
-      return;
-    }
-    pos--;
-    while (pos != 0 && buf[pos] != '/' && buf[pos] != '\\')
-      pos--;
-  }
+  if (g_display_perf)
+    RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
+  g_renderer_funcs.EndDraw();
 }
 
 static SDL_mutex *g_audio_mutex;
@@ -169,7 +177,7 @@ static int g_frames_per_block;
 static uint8 g_audio_channels;
 
 static void SDLCALL AudioCallback(void *userdata, Uint8 *stream, int len) {
-  SDL_LockMutex(g_audio_mutex);
+  if (SDL_LockMutex(g_audio_mutex)) Die("Mutex lock failed!");
   while (len != 0) {
     if (g_audiobuffer_end - g_audiobuffer_cur == 0) {
       ZeldaRenderAudio((int16*)g_audiobuffer, g_frames_per_block, g_audio_channels);
@@ -177,7 +185,12 @@ static void SDLCALL AudioCallback(void *userdata, Uint8 *stream, int len) {
       g_audiobuffer_end = g_audiobuffer + g_frames_per_block * g_audio_channels * sizeof(int16);
     }
     int n = IntMin(len, g_audiobuffer_end - g_audiobuffer_cur);
-    memcpy(stream, g_audiobuffer_cur, n);
+    if (g_sdl_audio_mixer_volume == SDL_MIX_MAXVOLUME) {
+      memcpy(stream, g_audiobuffer_cur, n);
+    } else {
+      SDL_memset(stream, 0, n);
+      SDL_MixAudioFormat(stream, g_audiobuffer_cur, AUDIO_S16, n, g_sdl_audio_mixer_volume);
+    }
     g_audiobuffer_cur += n;
     stream += n;
     len -= n;
@@ -185,25 +198,102 @@ static void SDLCALL AudioCallback(void *userdata, Uint8 *stream, int len) {
 
   ZeldaDiscardUnusedAudioFrames();
   SDL_UnlockMutex(g_audio_mutex);
-
-
 }
 
+// State for sdl renderer
+static SDL_Renderer *g_renderer;
+static SDL_Texture *g_texture;
+static SDL_Rect g_sdl_renderer_rect;
 
+static bool SdlRenderer_Init(SDL_Window *window) {
+
+  if (g_config.shader)
+    fprintf(stderr, "Warning: Shaders are supported only with the OpenGL backend\n");
+
+  SDL_Renderer *renderer = SDL_CreateRenderer(g_window, -1,
+                                              g_config.output_method == kOutputMethod_SDLSoftware ? SDL_RENDERER_SOFTWARE :
+                                              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  if (renderer == NULL) {
+    printf("Failed to create renderer: %s\n", SDL_GetError());
+    return false;
+  }
+  SDL_RendererInfo renderer_info;
+  SDL_GetRendererInfo(renderer, &renderer_info);
+  if (kDebugFlag) {
+    printf("Supported texture formats:");
+    for (int i = 0; i < renderer_info.num_texture_formats; i++)
+      printf(" %s", SDL_GetPixelFormatName(renderer_info.texture_formats[i]));
+    printf("\n");
+  }
+  g_renderer = renderer;
+  if (!g_config.ignore_aspect_ratio)
+    SDL_RenderSetLogicalSize(renderer, g_snes_width, g_snes_height);
+  if (g_config.linear_filtering)
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+
+  int tex_mult = (g_ppu_render_flags & kPpuRenderFlags_4x4Mode7) ? 4 : 1;
+  g_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+                                g_snes_width * tex_mult, g_snes_height * tex_mult);
+  if (g_texture == NULL) {
+    printf("Failed to create texture: %s\n", SDL_GetError());
+    return false;
+  }
+  return true;
+}
+
+static void SdlRenderer_Destroy() {
+  SDL_DestroyTexture(g_texture);
+  SDL_DestroyRenderer(g_renderer);
+}
+
+static void SdlRenderer_BeginDraw(int width, int height, uint8 **pixels, int *pitch) {
+  g_sdl_renderer_rect.w = width;
+  g_sdl_renderer_rect.h = height;
+  if (SDL_LockTexture(g_texture, &g_sdl_renderer_rect, (void **)pixels, pitch) != 0) {
+    printf("Failed to lock texture: %s\n", SDL_GetError());
+    return;
+  }
+}
+
+static void SdlRenderer_EndDraw() {
+
+//  uint64 before = SDL_GetPerformanceCounter();
+  SDL_UnlockTexture(g_texture);
+//  uint64 after = SDL_GetPerformanceCounter();
+//  float v = (double)(after - before) / SDL_GetPerformanceFrequency();
+//  printf("%f ms\n", v * 1000);
+  SDL_RenderClear(g_renderer);
+  SDL_RenderCopy(g_renderer, g_texture, &g_sdl_renderer_rect, NULL);
+  SDL_RenderPresent(g_renderer); // vsyncs to 60 FPS?
+}
+
+static const struct RendererFuncs kSdlRendererFuncs  = {
+  &SdlRenderer_Init,
+  &SdlRenderer_Destroy,
+  &SdlRenderer_BeginDraw,
+  &SdlRenderer_EndDraw,
+};
+
+void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es);
 
 #undef main
 int main(int argc, char** argv) {
-  SwitchDirectory();
-  ParseConfigFile();
-  AfterConfigParse();
+  argc--, argv++;
+  const char *config_file = NULL;
+  if (argc >= 2 && strcmp(argv[0], "--config") == 0) {
+    config_file = argv[1];
+    argc -= 2, argv += 2;
+  } else {
+    SwitchDirectory();
+  }
+  ParseConfigFile(config_file);
   LoadAssets();
   LoadLinkGraphics();
 
-
   ZeldaInitialize();
   g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
-  g_snes_width = 2 * (g_config.extended_aspect_ratio * 2 + 256);
-  g_snes_height = (g_config.extend_y ? 240 : 224) * 2;
+  g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
+  g_snes_height = (g_config.extend_y ? 240 : 224);
 
 
   // Delay actually setting those features in ram until any snapshots finish playing.
@@ -213,7 +303,8 @@ int main(int argc, char** argv) {
                        g_config.enhanced_mode7 * kPpuRenderFlags_4x4Mode7 |
                        g_config.extend_y * kPpuRenderFlags_Height240 |
                        g_config.no_sprite_limits * kPpuRenderFlags_NoSpriteLimits;
-  msu_enabled = g_config.enable_msu;
+  ZeldaEnableMsu(g_config.enable_msu);
+  ZeldaSetLanguage(g_config.language);
 
   if (g_config.fullscreen == 1)
     g_win_flags ^= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -227,7 +318,7 @@ int main(int argc, char** argv) {
   if (g_config.audio_freq < 11025 || g_config.audio_freq > 48000)
     g_config.audio_freq = kDefaultFreq;
 
-  // Currently, the SPC/DSP implementation �only supports up to stereo.
+  // Currently, the SPC/DSP implementation only supports up to stereo.
   if (g_config.audio_channels < 1 || g_config.audio_channels > 2)
     g_config.audio_channels = kDefaultChannels;
 
@@ -241,8 +332,18 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  int window_width = g_current_window_scale * (g_snes_width / kDefaultWindowScale);
-  int window_height = g_current_window_scale * (g_snes_height / kDefaultWindowScale);
+  bool custom_size  = g_config.window_width != 0 && g_config.window_height != 0;
+  int window_width  = custom_size ? g_config.window_width  : g_current_window_scale * g_snes_width;
+  int window_height = custom_size ? g_config.window_height : g_current_window_scale * g_snes_height;
+
+  if (g_config.output_method == kOutputMethod_OpenGL ||
+      g_config.output_method == kOutputMethod_OpenGL_ES) {
+    g_win_flags |= SDL_WINDOW_OPENGL;
+    OpenGLRenderer_Create(&g_renderer_funcs, (g_config.output_method == kOutputMethod_OpenGL_ES));
+  } else {
+    g_renderer_funcs = kSdlRendererFuncs;
+  }
+
   SDL_Window* window = SDL_CreateWindow(kWindowTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, window_width, window_height, g_win_flags);
   if(window == NULL) {
     printf("Failed to create window: %s\n", SDL_GetError());
@@ -250,34 +351,14 @@ int main(int argc, char** argv) {
   }
   g_window = window;
   SDL_SetWindowHitTest(window, HitTestCallback, NULL);
-  SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-  if(renderer == NULL) {
-    printf("Failed to create renderer: %s\n", SDL_GetError());
+
+  if (!g_renderer_funcs.Initialize(window))
     return 1;
-  }
 
-  SDL_RendererInfo renderer_info;
-  SDL_GetRendererInfo(renderer, &renderer_info);
-  printf("Supported texture formats:");
-  for (int i = 0; i < renderer_info.num_texture_formats; i++)
-    printf(" %s", SDL_GetPixelFormatName(renderer_info.texture_formats[i]));
-  printf("\n");
-
-  g_renderer = renderer;
-  if (!g_config.ignore_aspect_ratio)
-    SDL_RenderSetLogicalSize(renderer, g_snes_width, g_snes_height);
-  SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, g_snes_width * 2, g_snes_height * 2);
-  if(texture == NULL) {
-    printf("Failed to create texture: %s\n", SDL_GetError());
-    return 1;
-  }
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
-
-  SDL_AudioDeviceID device;
+  SDL_AudioDeviceID device = 0;
   SDL_AudioSpec want = { 0 }, have;
-  SDL_mutex *audio_mutex = SDL_CreateMutex();
-  if (!audio_mutex) Die("No mutex");
-  SDL_LockMutex(audio_mutex);
+  g_audio_mutex = SDL_CreateMutex();
+  if (!g_audio_mutex) Die("No mutex");
 
   if (g_config.enable_audio) {
     want.freq = g_config.audio_freq;
@@ -292,12 +373,11 @@ int main(int argc, char** argv) {
     }
     g_audio_channels = have.channels;
     g_frames_per_block = (534 * have.freq) / 32000;
-    g_audiobuffer = static_cast<uint8 *>(malloc((g_frames_per_block * have.channels * sizeof(int16))));
-    SDL_PauseAudioDevice(device, 0);
+    g_audiobuffer = malloc(g_frames_per_block * have.channels * sizeof(int16));
   }
 
-  if (argc >= 2 && !g_run_without_emu)
-    LoadRom(argv[1]);
+  if (argc >= 1 && !g_run_without_emu)
+    LoadRom(argv[0]);
 
 #if defined(_WIN32)
   _mkdir("saves");
@@ -315,9 +395,10 @@ int main(int argc, char** argv) {
   uint32 lastTick = SDL_GetTicks();
   uint32 curTick = 0;
   uint32 frameCtr = 0;
+  bool audiopaused = true;
 
   if (g_config.autosave)
-    SaveLoadSlot(kSaveLoad_Load, 0);
+    HandleCommand(kKeys_Load + 0, true);
 
   while(running) {
     while(SDL_PollEvent(&event)) {
@@ -329,18 +410,19 @@ int main(int argc, char** argv) {
         HandleGamepadAxisInput(event.caxis.which, event.caxis.axis, event.caxis.value);
         break;
       case SDL_CONTROLLERBUTTONDOWN:
-        HandleGamepadInput(event.cbutton.button, event.cbutton.state == SDL_PRESSED);
+      case SDL_CONTROLLERBUTTONUP: {
+        int b = RemapSdlButton(event.cbutton.button);
+        if (b >= 0)
+          HandleGamepadInput(b, event.type == SDL_CONTROLLERBUTTONDOWN);
         break;
-      case SDL_CONTROLLERBUTTONUP:
-        HandleGamepadInput(event.cbutton.button, event.cbutton.state == SDL_PRESSED);
-        break;
+      }
       case SDL_MOUSEWHEEL:
-        if (((g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == 0 || (g_win_flags & SDL_WINDOW_FULLSCREEN) == 0) && event.wheel.y != 0 && SDL_GetModState() & KMOD_CTRL)
+        if (SDL_GetModState() & KMOD_CTRL && event.wheel.y != 0)
           ChangeWindowScale(event.wheel.y > 0 ? 1 : -1);
         break;
       case SDL_MOUSEBUTTONDOWN:
         if (event.button.button == SDL_BUTTON_LEFT && event.button.state == SDL_PRESSED && event.button.clicks == 2) {
-          if (((g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == 0 || (g_win_flags & SDL_WINDOW_FULLSCREEN) == 0) && SDL_GetModState() & KMOD_SHIFT) {
+          if ((g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == 0 && (g_win_flags & SDL_WINDOW_FULLSCREEN) == 0 && SDL_GetModState() & KMOD_SHIFT) {
             g_win_flags ^= SDL_WINDOW_BORDERLESS;
 			  SDL_SetWindowBordered(g_window, static_cast<SDL_bool>((g_win_flags & SDL_WINDOW_BORDERLESS) == 0));
           }
@@ -358,12 +440,16 @@ int main(int argc, char** argv) {
       }
     }
 
+    if (g_paused != audiopaused) {
+      audiopaused = g_paused;
+      if (device)
+        SDL_PauseAudioDevice(device, audiopaused);
+    }
+
     if (g_paused) {
       SDL_Delay(16);
       continue;
     }
-
-    uint64 t0 = SDL_GetPerformanceCounter();
 
     // Clear gamepad inputs when joypad directional inputs to avoid wonkiness
     int inputs = g_input1_state;
@@ -371,49 +457,58 @@ int main(int argc, char** argv) {
       g_gamepad_buttons = 0;
     inputs |= g_gamepad_buttons;
 
+    SDL_LockMutex(g_audio_mutex);
     bool is_replay = ZeldaRunFrame(inputs);
+    SDL_UnlockMutex(g_audio_mutex);
 
-    if ((g_turbo ^ (is_replay & g_replay_turbo)) && (frameCtr++ & (g_turbo ? 0xf : 0x7f)) != 0)
+    frameCtr++;
+
+    if ((g_turbo ^ (is_replay & g_replay_turbo)) && (frameCtr & (g_turbo ? 0xf : 0x7f)) != 0) {
       continue;
+    }
 
-    // Unlock mutex for the final rendering stage.
-    SDL_UnlockMutex(audio_mutex);
+    DrawPpuFrameWithPerf();
 
-    RenderScreen(window, renderer, texture, (g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0);
-    SDL_RenderPresent(renderer); // vsyncs to 60 FPS?
+    if (g_config.display_perf_title) {
+      char title[60];
+      snprintf(title, sizeof(title), "%s | FPS: %d", kWindowTitle, g_curr_fps);
+      SDL_SetWindowTitle(g_window, title);
+    }
 
     // if vsync isn't working, delay manually
     curTick = SDL_GetTicks();
 
-    static const uint8 delays[3] = { 17, 17, 16 }; // 60 fps
-#if 1
-    lastTick += delays[frameCtr % 3];
+    if (!g_config.disable_frame_delay) {
+      static const uint8 delays[3] = { 17, 17, 16 }; // 60 fps
+      lastTick += delays[frameCtr % 3];
 
-    if (lastTick > curTick) {
-      uint32 delta = lastTick - curTick;
-      if (delta > 500) {
-        lastTick = curTick - 500;
-        delta = 500;
+      if (lastTick > curTick) {
+        uint32 delta = lastTick - curTick;
+        if (delta > 500) {
+          lastTick = curTick - 500;
+          delta = 500;
+        }
+//        printf("Sleeping %d\n", delta);
+        SDL_Delay(delta);
+      } else if (curTick - lastTick > 500) {
+        lastTick = curTick;
       }
-      SDL_Delay(delta);
-    } else if (curTick - lastTick > 500) {
-      lastTick = curTick;
     }
-#endif
-    SDL_LockMutex(audio_mutex);
   }
   if (g_config.autosave)
-    SaveLoadSlot(kSaveLoad_Save, 0);
+    HandleCommand(kKeys_Save + 0, true);
+
   // clean sdl
   if (g_config.enable_audio) {
-    SDL_UnlockMutex(audio_mutex);
     SDL_PauseAudioDevice(device, 1);
     SDL_CloseAudioDevice(device);
   }
-  SDL_DestroyMutex(audio_mutex);
+
+  SDL_DestroyMutex(g_audio_mutex);
   free(g_audiobuffer);
-  SDL_DestroyTexture(texture);
-  SDL_DestroyRenderer(renderer);
+
+  g_renderer_funcs.Destroy();
+
   SDL_DestroyWindow(window);
   SDL_Quit();
   //SaveConfigFile();
@@ -465,49 +560,15 @@ static void RenderNumber(uint8 *dst, size_t pitch, int n, bool big) {
     RenderDigit(dst + (i << big), pitch, *s - '0', 0xffffff, big);
 }
 
-static void RenderScreen(SDL_Window *window, SDL_Renderer *renderer, SDL_Texture *texture, bool fullscreen) {
-  uint8* pixels = NULL;
-  int pitch = 0;
-  uint64 t0 = SDL_GetPerformanceCounter();
-  if(SDL_LockTexture(texture, NULL, (void**)&pixels, &pitch) != 0) {
-    printf("Failed to lock texture: %s\n", SDL_GetError());
-    return;
-  }
-  uint64 t1 = SDL_GetPerformanceCounter();
-  bool hq = RenderScreenWithPerf(pixels, pitch, g_ppu_render_flags);
-  if (g_display_perf) {
-    RenderNumber(pixels + (pitch * 2 << hq), pitch, g_curr_fps, hq);
-  }
-  if (g_config.display_perf_title) {
-    char title[60];
-    snprintf(title, sizeof(title), "%s | FPS: %d", kWindowTitle, g_curr_fps);
-    SDL_SetWindowTitle(window, title);
-  }
-  uint64 t2 = SDL_GetPerformanceCounter();
-  SDL_UnlockTexture(texture);
-  uint64 t3 = SDL_GetPerformanceCounter();
-  SDL_RenderClear(renderer);
-  uint64 t4 = SDL_GetPerformanceCounter();
-  SDL_Rect src_rect = { 0, 0, g_snes_width, g_snes_height };
-  SDL_RenderCopy(renderer, texture, hq ? NULL : &src_rect, NULL);
-  uint64 t5 = SDL_GetPerformanceCounter();
-
-  double f = 1e3 / (double)SDL_GetPerformanceFrequency();
-  if (0) printf("RenderPerf %6.2f %6.2f %6.2f %6.2f %6.2f\n",
-    (t1 - t0) * f,
-    (t2 - t1) * f,
-    (t3 - t2) * f,
-    (t4 - t3) * f,
-    (t5 - t4) * f
-  );
-
-
-}
+static void HandleCommand_Locked(uint32 j, bool pressed);
 
 static void HandleCommand(uint32 j, bool pressed) {
   if (j <= kKeys_Controls_Last) {
-    static const uint8 kKbdRemap[12] = { 4, 5, 6, 7, 2, 3, 8, 0, 9, 1, 10, 11 };
-    SetButtonState(kKbdRemap[j], pressed);
+    static const uint8 kKbdRemap[] = { 0, 4, 5, 6, 7, 2, 3, 8, 0, 9, 1, 10, 11 };
+    if (pressed)
+      g_input1_state |= 1 << kKbdRemap[j];
+    else
+      g_input1_state &= ~(1 << kKbdRemap[j]);
     return;
   }
 
@@ -516,6 +577,23 @@ static void HandleCommand(uint32 j, bool pressed) {
     return;
   }
 
+  // Everything that might access audio state
+  // (like SaveLoad and Reset) must have the lock.
+  SDL_LockMutex(g_audio_mutex);
+  HandleCommand_Locked(j, pressed);
+  SDL_UnlockMutex(g_audio_mutex);
+}
+
+void ZeldaApuLock() {
+  SDL_LockMutex(g_audio_mutex);
+}
+
+void ZeldaApuUnlock() {
+  SDL_UnlockMutex(g_audio_mutex);
+}
+
+
+static void HandleCommand_Locked(uint32 j, bool pressed) {
   if (!pressed)
     return;
   if (j <= kKeys_Load_Last) {
@@ -548,26 +626,32 @@ static void HandleCommand(uint32 j, bool pressed) {
     case kKeys_Pause: g_paused = !g_paused; break;
     case kKeys_PauseDimmed:
       g_paused = !g_paused;
+      // SDL_RenderPresent may not be called more than once per frame.
+      // Seems to work on Windows still. Temporary measure until it's fixed.
+#ifdef _WIN32
       if (g_paused) {
         SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 159);
         SDL_RenderFillRect(g_renderer, NULL);
         SDL_RenderPresent(g_renderer);
       }
+#endif
       break;
     case kKeys_ReplayTurbo: g_replay_turbo = !g_replay_turbo; break;
     case kKeys_WindowBigger: ChangeWindowScale(1); break;
     case kKeys_WindowSmaller: ChangeWindowScale(-1); break;
     case kKeys_DisplayPerf: g_display_perf ^= 1; break;
     case kKeys_ToggleRenderer: g_ppu_render_flags ^= kPpuRenderFlags_NewRenderer; break;
+    case kKeys_VolumeUp:
+    case kKeys_VolumeDown: HandleVolumeAdjustment(j == kKeys_VolumeUp ? 1 : -1); break;
     default: assert(0);
     }
   }
 }
 
 static void HandleInput(int keyCode, int keyMod, bool pressed) {
-  int j = FindCmdForSdlKey(keyCode, (SDL_Keymod)keyMod);
-  if (j >= 0)
+  int j = FindCmdForSdlKey(keyCode, keyMod);
+  if (j != 0)
     HandleCommand(j, pressed);
 }
 
@@ -579,21 +663,47 @@ static void OpenOneGamepad(int i) {
   }
 }
 
-static void HandleGamepadInput(int button, bool pressed) {
+static int RemapSdlButton(int button) {
   switch (button) {
-  case SDL_CONTROLLER_BUTTON_A: SetButtonState(0, pressed); break;
-  case SDL_CONTROLLER_BUTTON_X: SetButtonState(1, pressed); break;
-  case SDL_CONTROLLER_BUTTON_BACK: SetButtonState(2, pressed); break;
-  case SDL_CONTROLLER_BUTTON_START: SetButtonState(3, pressed); break;
-  case SDL_CONTROLLER_BUTTON_DPAD_UP: SetButtonState(4, pressed); break;
-  case SDL_CONTROLLER_BUTTON_DPAD_DOWN: SetButtonState(5, pressed); break;
-  case SDL_CONTROLLER_BUTTON_DPAD_LEFT: SetButtonState(6, pressed); break;
-  case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: SetButtonState(7, pressed); break;
-  case SDL_CONTROLLER_BUTTON_B: SetButtonState(8, pressed); break;
-  case SDL_CONTROLLER_BUTTON_Y: SetButtonState(9, pressed); break;
-  case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: SetButtonState(10, pressed); break;
-  case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: SetButtonState(11, pressed); break;
+  case SDL_CONTROLLER_BUTTON_A: return kGamepadBtn_A;
+  case SDL_CONTROLLER_BUTTON_B: return kGamepadBtn_B;
+  case SDL_CONTROLLER_BUTTON_X: return kGamepadBtn_X;
+  case SDL_CONTROLLER_BUTTON_Y: return kGamepadBtn_Y;
+  case SDL_CONTROLLER_BUTTON_BACK: return kGamepadBtn_Back;
+  case SDL_CONTROLLER_BUTTON_GUIDE: return kGamepadBtn_Guide;
+  case SDL_CONTROLLER_BUTTON_START: return kGamepadBtn_Start;
+  case SDL_CONTROLLER_BUTTON_LEFTSTICK: return kGamepadBtn_L3;
+  case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return kGamepadBtn_R3;
+  case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return kGamepadBtn_L1;
+  case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return kGamepadBtn_R1;
+  case SDL_CONTROLLER_BUTTON_DPAD_UP: return kGamepadBtn_DpadUp;
+  case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return kGamepadBtn_DpadDown;
+  case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return kGamepadBtn_DpadLeft;
+  case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return kGamepadBtn_DpadRight;
+  default: return -1;
   }
+}
+
+static void HandleGamepadInput(int button, bool pressed) {
+  if (!!(g_gamepad_modifiers & (1 << button)) == pressed)
+    return;
+  g_gamepad_modifiers ^= 1 << button;
+  if (pressed)
+    g_gamepad_last_cmd[button] = FindCmdForGamepadButton(button, g_gamepad_modifiers);
+  if (g_gamepad_last_cmd[button] != 0)
+    HandleCommand(g_gamepad_last_cmd[button], pressed);
+}
+
+static void HandleVolumeAdjustment(int volume_adjustment) {
+#if SYSTEM_VOLUME_MIXER_AVAILABLE
+  int current_volume = GetApplicationVolume();
+  int new_volume = IntMin(IntMax(0, current_volume + volume_adjustment * 5), 100);
+  SetApplicationVolume(new_volume);
+  printf("[System Volume]=%i\n", new_volume);
+#else
+  g_sdl_audio_mixer_volume = IntMin(IntMax(0, g_sdl_audio_mixer_volume + volume_adjustment * (SDL_MIX_MAXVOLUME >> 4)), SDL_MIX_MAXVOLUME);
+  printf("[SDL mixer volume]=%i\n", g_sdl_audio_mixer_volume);
+#endif
 }
 
 // Approximates atan2(y, x) normalized to the [0,4) range
@@ -647,12 +757,15 @@ static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
       buttons = kSegmentToButtons[(uint8)(angle + 16 + 64) >> 5];
     }
     g_gamepad_buttons = buttons;
+  } else if ((axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
+    if (value < 12000 || value >= 16000)  // hysteresis
+      HandleGamepadInput(axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? kGamepadBtn_L2 : kGamepadBtn_R2, value >= 12000);
   }
 }
 
 static bool LoadRom(const char *filename) {
   size_t length = 0;
-  uint8 *file = ReadFile(filename, &length);
+  uint8 *file = ReadWholeFile(filename, &length);
   if(!file) Die("Failed to read file");
   bool result = EmuInitialize(file, length);
   free(file);
@@ -684,7 +797,7 @@ static void LoadLinkGraphics() {
   if (g_config.link_graphics) {
     fprintf(stderr, "Loading Link Graphics: %s\n", g_config.link_graphics);
     size_t length = 0;
-    uint8 *file = ReadFile(g_config.link_graphics, &length);
+    uint8 *file = ReadWholeFile(g_config.link_graphics, &length);
     if (file == NULL || !ParseLinkGraphics(file, length))
       Die("Unable to load file");
     free(file);
@@ -697,10 +810,10 @@ uint32 g_asset_sizes[kNumberOfAssets];
 
 static void LoadAssets() {
   size_t length = 0;
-  uint8 *data = ReadFile("tables/zelda3_assets.dat", &length);
+  uint8 *data = ReadWholeFile("tables/zelda3_assets.dat", &length);
   if (!data)
-    data = ReadFile("zelda3_assets.dat", &length);
-  if (!data) Die("Failed to read zelda3_assets.dat");
+    data = ReadWholeFile("zelda3_assets.dat", &length);
+  if (!data) Die("Failed to read zelda3_assets.dat. Please see the README for information about how you get this file.");
 
   static const char kAssetsSig[] = { kAssets_Sig };
 
@@ -720,5 +833,40 @@ static void LoadAssets() {
     g_asset_ptrs[i] = data + offset;
     offset += size;
   }
+
+  if (g_config.features0 & kFeatures0_DimFlashes) { // patch dungeon floor palettes
+    kPalette_DungBgMain[0x484] = 0x70;
+    kPalette_DungBgMain[0x485] = 0x95;
+    kPalette_DungBgMain[0x486] = 0x57;
+  }
 }
 
+// Go some steps up and find zelda3.ini
+static void SwitchDirectory() {
+  char buf[4096];
+  if (!getcwd(buf, sizeof(buf) - 32))
+    return;
+  size_t pos = strlen(buf);
+
+  for (int step = 0; pos != 0 && step < 3; step++) {
+    memcpy(buf + pos, "/zelda3.ini", 12);
+    FILE *f = fopen(buf, "rb");
+    if (f) {
+      fclose(f);
+      buf[pos] = 0;
+      if (step != 0) {
+        printf("Found zelda3.ini in %s\n", buf);
+        int err = chdir(buf);
+        (void)err;
+      }
+      return;
+    }
+    pos--;
+    while (pos != 0 && buf[pos] != '/' && buf[pos] != '\\')
+      pos--;
+  }
+}
+
+MemBlk FindInAssetArray(int asset, int idx) {
+  return FindIndexInMemblk((MemBlk) { g_asset_ptrs[asset], g_asset_sizes[asset] }, idx);
+}

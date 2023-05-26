@@ -5,6 +5,7 @@
 #include "snes/snes_regs.h"
 #include "snes/ppu.h"
 #include "assets.h"
+#include "audio.h"
 
 static const uint8 kNmiVramAddrs[] = {
   0, 0, 4, 8, 12, 8, 12, 0, 4, 0, 8, 4, 12, 4, 12, 0,
@@ -46,117 +47,24 @@ void NMI_UploadSubscreenOverlayLatter() {
   NMI_HandleArbitraryTileMap(&g_ram[0x13000], 0x40, 0x80);
 }
 
-void CopyToVram(uint32 dstv, const uint8 *src, int len) {
+static void CopyToVram(uint32 dstv, const uint8 *src, int len) {
   memcpy(&g_zenv.vram[dstv], src, len);
 }
 
-void CopyToVramVertical(uint32 dstv, const uint8 *src, int len) {
+static void CopyToVramVertical(uint32 dstv, const uint8 *src, int len) {
   assert(!(len & 1));
   uint16 *dst = &g_zenv.vram[dstv];
   for (int i = 0, i_end = len >> 1; i < i_end; i++, dst += 32, src += 2)
     *dst = WORD(*src);
 }
 
-void CopyToVramLow(const uint8 *src, uint32 addr, int num) {
-  zelda_ppu_write(VMAIN, 0);
-  zelda_ppu_write_word(VMADDL, addr);
-  for (int i = 0; i < num; i++) {
-    zelda_ppu_write(VMDATAL, *src++);
-  }
+static void CopyToVramLow(const uint8 *src, uint32 addr, int num) {
+  uint16 *dst = &g_zenv.vram[addr];
+  for (int i = 0; i < num; i++)
+    dst[i] = (dst[i] & ~0xff) | src[i];
 }
 
-void Interrupt_NMI(uint16 joypad_input) {  // 8080c9
-  if (music_control == 0) {
-    if (zelda_apu_read(APUI00) == last_music_control)
-      zelda_apu_write(APUI00, 0);
-  // Zelda causes unwanted music change when going in a portal. last_music_control doesn't hold the 
-  // song but the last applied effect
-  } else if (music_control != (enhanced_features0 & kFeatures0_MiscBugFixes ? music_unk1 : last_music_control)) {
-    last_music_control = music_control;
-    ZeldaPlayMsuAudioTrack();
-    if (music_control < 0xf2)
-      music_unk1 = music_control;
-    music_control = 0;
-  }
-
-  if (sound_effect_ambient == 0) {
-    if (zelda_apu_read(APUI01) == sound_effect_ambient_last)
-      zelda_apu_write(APUI01, 0);
-  } else {
-    sound_effect_ambient_last = sound_effect_ambient;
-    zelda_apu_write(APUI01, sound_effect_ambient);
-    sound_effect_ambient = 0;
-  }
-  zelda_apu_write(APUI02, sound_effect_1);
-  zelda_apu_write(APUI03, sound_effect_2);
-  sound_effect_1 = 0;
-  sound_effect_2 = 0;
-
-  zelda_ppu_write(INIDISP, 0x80);
-  zelda_snes_dummy_write(HDMAEN, 0);
-  if (!nmi_boolean) {
-    nmi_boolean = true;
-    NMI_DoUpdates();
-    NMI_ReadJoypads(joypad_input);
-  }
-
-  if (is_nmi_thread_active) {
-    NMI_SwitchThread();
-  } else {
-    zelda_ppu_write(W12SEL, W12SEL_copy);
-    zelda_ppu_write(W34SEL, W34SEL_copy);
-    zelda_ppu_write(WOBJSEL, WOBJSEL_copy);
-    zelda_ppu_write(CGWSEL, CGWSEL_copy);
-    zelda_ppu_write(CGADSUB, CGADSUB_copy);
-    zelda_ppu_write(COLDATA, COLDATA_copy0);
-    zelda_ppu_write(COLDATA, COLDATA_copy1);
-    zelda_ppu_write(COLDATA, COLDATA_copy2);
-    zelda_ppu_write(TM, TM_copy);
-    zelda_ppu_write(TS, TS_copy);
-    zelda_ppu_write(TMW, TMW_copy);
-    zelda_ppu_write(TSW, TSW_copy);
-    zelda_ppu_write(BG1HOFS, BG1HOFS_copy);
-    zelda_ppu_write(BG1HOFS, BG1HOFS_copy >> 8);
-    zelda_ppu_write(BG1VOFS, BG1VOFS_copy);
-    zelda_ppu_write(BG1VOFS, BG1VOFS_copy >> 8);
-    zelda_ppu_write(BG2HOFS, BG2HOFS_copy);
-    zelda_ppu_write(BG2HOFS, BG2HOFS_copy >> 8);
-    zelda_ppu_write(BG2VOFS, BG2VOFS_copy);
-    zelda_ppu_write(BG2VOFS, BG2VOFS_copy >> 8);
-    zelda_ppu_write(BG3HOFS, BG3HOFS_copy2);
-    zelda_ppu_write(BG3HOFS, BG3HOFS_copy2 >> 8);
-    zelda_ppu_write(BG3VOFS, BG3VOFS_copy2);
-    zelda_ppu_write(BG3VOFS, BG3VOFS_copy2 >> 8);
-    zelda_ppu_write(MOSAIC, MOSAIC_copy);
-    zelda_ppu_write(BGMODE, BGMODE_copy);
-    if ((BGMODE_copy & 7) == 7) {
-      zelda_ppu_write(M7B, 0);
-      zelda_ppu_write(M7B, 0);
-      zelda_ppu_write(M7C, 0);
-      zelda_ppu_write(M7C, 0);
-      zelda_ppu_write(M7X, M7X_copy);
-      zelda_ppu_write(M7X, M7X_copy >> 8);
-      zelda_ppu_write(M7Y, M7Y_copy);
-      zelda_ppu_write(M7Y, M7Y_copy >> 8);
-    }
-    //if (irq_flag) {
-    //  snes_dummy_read(g_snes, TIMEUP);
-    //  snes_dummy_write(g_snes, VTIMEL, 0x80);
-    //  snes_dummy_write(g_snes, VTIMEH, 0);
-    //  snes_dummy_write(g_snes, HTIMEL, 0);
-    //  snes_dummy_write(g_snes, HTIMEH, 0);
-    //  snes_dummy_write(g_snes, NMITIMEN, 0xa1);
-    //}
-    zelda_ppu_write(INIDISP, INIDISP_copy);
-    zelda_snes_dummy_write(HDMAEN, HDMAEN_copy);
-  }
-}
-
-void NMI_SwitchThread() {  // 80822d
-  NMI_UpdateIRQGFX();
-  //zelda_snes_dummy_write(VTIMEL, virq_trigger);
-  //zelda_snes_dummy_write(VTIMEH, 0);
-  //zelda_snes_dummy_write(NMITIMEN, 0xa1);
+void WritePpuRegisters() {
   zelda_ppu_write(W12SEL, W12SEL_copy);
   zelda_ppu_write(W34SEL, W34SEL_copy);
   zelda_ppu_write(WOBJSEL, WOBJSEL_copy);
@@ -182,8 +90,66 @@ void NMI_SwitchThread() {  // 80822d
   zelda_ppu_write(BG3VOFS, BG3VOFS_copy2);
   zelda_ppu_write(BG3VOFS, BG3VOFS_copy2 >> 8);
   zelda_ppu_write(INIDISP, INIDISP_copy);
-  zelda_snes_dummy_write(HDMAEN, HDMAEN_copy);
-  thread_other_stack = (thread_other_stack != 0x1f31) ? 0x1f31 : 0x1f2;
+  zelda_ppu_write(MOSAIC, MOSAIC_copy);
+  zelda_ppu_write(BGMODE, BGMODE_copy);
+  if ((BGMODE_copy & 7) == 7) {
+    zelda_ppu_write(M7B, 0);
+    zelda_ppu_write(M7B, 0);
+    zelda_ppu_write(M7C, 0);
+    zelda_ppu_write(M7C, 0);
+    zelda_ppu_write(M7X, M7X_copy);
+    zelda_ppu_write(M7X, M7X_copy >> 8);
+    zelda_ppu_write(M7Y, M7Y_copy);
+    zelda_ppu_write(M7Y, M7Y_copy >> 8);
+  }
+  zelda_ppu_write(BG12NBA, 0x22);
+  zelda_ppu_write(BG34NBA, 7);
+}
+
+static void Interrupt_NMI_AudioParts_Locked() {
+  if (music_control == 0) {
+//    if (zelda_apu_read(APUI00) == last_music_control)
+//      zelda_apu_write(APUI00, 0);
+    // Zelda causes unwanted music change when going in a portal. last_music_control doesn't hold the 
+    // song but the last applied effect
+  } else if (!ZeldaIsPlayingMusicTrackWithBug(music_control)) {
+    last_music_control = music_control;
+    ZeldaPlayMsuAudioTrack(music_control);
+    if (music_control < 0xf2)
+      music_unk1 = music_control;
+    music_control = 0;
+  }
+
+  if (sound_effect_ambient == 0) {
+    if (zelda_apu_read(APUI01) == sound_effect_ambient_last)
+      zelda_apu_write(APUI01, 0);
+  } else {
+    sound_effect_ambient_last = sound_effect_ambient;
+    zelda_apu_write(APUI01, sound_effect_ambient);
+    sound_effect_ambient = 0;
+  }
+  zelda_apu_write(APUI02, sound_effect_1);
+  zelda_apu_write(APUI03, sound_effect_2);
+  sound_effect_1 = 0;
+  sound_effect_2 = 0;
+
+}
+
+void Interrupt_NMI(uint16 joypad_input) {  // 8080c9
+
+  Interrupt_NMI_AudioParts_Locked();
+
+  if (!nmi_boolean) {
+    nmi_boolean = true;
+    NMI_DoUpdates();
+    NMI_ReadJoypads(joypad_input);
+  }
+
+  if (is_nmi_thread_active) {
+    NMI_UpdateIRQGFX();
+    thread_other_stack = (thread_other_stack != 0x1f31) ? 0x1f31 : 0x1f2;
+  }
+  WritePpuRegisters();
 }
 
 void NMI_ReadJoypads(uint16 joypad_input) {  // 8083d1
@@ -249,8 +215,7 @@ void NMI_DoUpdates() {  // 8089e0
   flag_update_hud_in_nmi = 0;
   flag_update_cgram_in_nmi = 0;
 
-  memcpy(g_zenv.ppu->oam, &g_ram[0x800], 0x200);
-  memcpy(g_zenv.ppu->highOam, &g_ram[0xa00], 0x20);
+  memcpy(g_zenv.ppu->oam, &g_ram[0x800], 0x220);
 
   if (nmi_load_bg_from_vram) {
     const uint8 *p;
@@ -323,7 +288,7 @@ void NMI_UploadBG3Text() {  // 808ce4
 }
 
 void NMI_UpdateOWScroll() {  // 808d13
-  uint8 *src = (uint8 *)uvram.data, *src_org = src;
+  uint8 *src = (uint8 *)uvram.data;
   int f = WORD(src[0]);
   int step = (f & 0x8000) ? 32 : 1;
   int len = f & 0x3fff;
@@ -426,7 +391,6 @@ void NMI_RunTileMapUpdateDMA(int dst) {  // 808fc9
 }
 
 void NMI_UploadDarkWorldMap() {  // 808ff3
-  static const uint16 kLightWorldTileMapSrcs[4] = { 0, 0x20, 0x1000, 0x1020 };
   const uint8 *src = g_ram + 0x1000;
   int t = 0x810;
   for (int i = 0x20; i; i--) {

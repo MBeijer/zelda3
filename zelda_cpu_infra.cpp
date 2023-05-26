@@ -46,12 +46,14 @@ static void MakeSnapshot(Snapshot *s) {
   memcpy(s->ram, g_snes->ram, 0x20000);
   memcpy(s->sram, g_snes->cart->ram, g_snes->cart->ramSize);
   memcpy(s->vram, g_snes->ppu->vram, sizeof(uint16) * 0x8000);
+  memcpy(s->ram + 0x1DBA0, s->ram + 0x1B00, 224 * 2);  // hdma_table (partial)
 }
 
 static void MakeMySnapshot(Snapshot *s) {
   memcpy(s->ram, g_zenv.ram, 0x20000);
   memcpy(s->sram, g_zenv.sram, 0x2000);
   memcpy(s->vram, g_zenv.ppu->vram, sizeof(uint16) * 0x8000);
+  memcpy(s->ram + 0x1B00, s->ram + 0x1DBA0, 224 * 2);  // hdma_table (partial)
 }
 
 static void RestoreMySnapshot(Snapshot *s) {
@@ -105,11 +107,14 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
   memcpy(&b->ram[0x1f0d], &a->ram[0x1f0d], 0x3f - 0xd);
   memcpy(b->ram + 0x138, a->ram + 0x138, 256 - 0x38); // copy the stack over
 
-  memcpy(a->ram + 0x1DBA0, b->ram + 0x1DBA0, 240 * 2);  // hdma_table
-  memcpy(b->ram + 0x1B00, b->ram + 0x1DBA0, 224 * 2);  // hdma_table (partial)
-
   memcpy(a->ram + 0x1cc0, b->ram + 0x1cc0, 2);  // some leftover stuff in hdma table
+  memcpy(a->ram + 0x1dd60, b->ram + 0x1dd60, 16 * 2);  // some leftover stuff in hdma table
 
+  memcpy(a->ram + 0x1db20, b->ram + 0x1db20, 64 * 2);  // msu
+  a->ram[0x654] = b->ram[0x654];  // msu_volume
+
+  memcpy(a->ram + 0x1CDD, b->ram + 0x1CDD, 2);  // dialogue_msg_src_offs
+  
   if (memcmp(b->ram, a->ram, 0x20000)) {
     fprintf(stderr, "@%d: Memory compare failed (mine != theirs, prev):\n", frame_counter);
     int j = 0;
@@ -165,7 +170,7 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
   }
 }
 
-static uint8_t *RomByte(Cart *cart, uint32_t addr) {
+uint8_t *RomByte(Cart *cart, uint32_t addr) {
   return &cart->rom[(((addr >> 16) << 15) | (addr & 0x7fff)) & (cart->romSize - 1)];
 }
 
@@ -312,7 +317,7 @@ static void RunEmulatedSnesFrame(Snes *snes, int run_what) {
 // Copy state into the emulator, we can skip dsp/apu because 
 // we're not emulating that.
 static void EmuSynchronizeWholeState() {
-  memcpy(&g_snes->ppu->vram, g_zenv.ppu->vram, offsetof(Ppu, ppu2openBus) + 1 - offsetof(Ppu, vram));
+  *g_snes->ppu = *g_zenv.ppu;
   memcpy(g_snes->ram, g_zenv.ram, 0x20000);
   memcpy(g_snes->cart->ram, g_zenv.sram, 0x2000);
   memcpy(g_snes->dma->channel, g_zenv.dma->channel, sizeof(Dma) - offsetof(Dma, channel));
@@ -351,7 +356,7 @@ again_mine:
   VerifySnapshotsEq(&g_snapshot_mine, &g_snapshot_theirs, &g_snapshot_before);
 
   if (g_fail) {
-    //    g_fail = false;
+    g_fail = false;
     if (1) {
       RestoreMySnapshot(&g_snapshot_before);
       //SaveLoadSlot(kSaveLoad_Save, 0);
@@ -381,6 +386,14 @@ static void PatchRomWord(uint8_t *rom, uint32_t addr, uint16 old_value, uint16 v
   assert(WORD(rom[(addr >> 16) << 15 | (addr & 0x7fff)]) == old_value);
   WORD(rom[(addr >> 16) << 15 | (addr & 0x7fff)]) = value;
 }
+
+static void PatchRomArray(uint8_t *rom, uint32_t addr, const uint8 *values, int n) {
+  for (int i = 0; i < n; i++) {
+    rom[(addr >> 16) << 15 | (addr & 0x7fff)] = values[i];
+    addr += 1;
+  }
+}
+
 
 
 static void PatchRom(uint8_t *rom) {
@@ -485,6 +498,9 @@ static void PatchRom(uint8_t *rom) {
   PatchRomBP(rom, 0x6d0c6);
 
   PatchRomBP(rom, 0x1d8f29); // adc instead of add
+  PatchRomBP(rom, 0x1DDBD3); // adc instead of add
+  PatchRomBP(rom, 0x1DF856); // adc instead of add
+  PatchRomBP(rom, 0x1E88DA); // adc instead of add
 
   PatchRomBP(rom, 0x06ED0B);
 
@@ -502,6 +518,8 @@ static void PatchRom(uint8_t *rom) {
   PatchRomBP(rom, 0x8f708); // don't init scratch_c
 
   PatchRomBP(rom, 0x1DCDEB); // y is destroyed earlier, restore it..
+
+  PatchRomBP(rom, 0x7B269);  // Link_APress_LiftCarryThrow oob
 
   // Smithy_Frog doesn't save X
   memmove(rom + 0x332b8, rom + 0x332b7, 4); rom[0x332b7] = 0xfa;
@@ -549,6 +567,10 @@ static void PatchRom(uint8_t *rom) {
 
   PatchRomWord(rom, 0xddfac + 1, 0xfa85, 0xfa70); // call Hud_Rebuild instead of Hud_UpdateOnly
 
+  // Make sure it's not calling Decomp_spr on tilesheets less than 12
+  PatchRomWord(rom, 0xe589, 0xe772, 0xe852);  // call New addr
+  static const uint8 kFixSoItWontDecodeSheetLessThan12[] = { 0xc0, 0x0c, 0xb0, 0x02, 0xa0, 0x0c, 0x4c, 0x72, 0xe7 };
+  PatchRomArray(rom, 0xe852, kFixSoItWontDecodeSheetLessThan12, sizeof(kFixSoItWontDecodeSheetLessThan12));
 }
 
 

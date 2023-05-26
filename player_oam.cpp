@@ -922,12 +922,11 @@ continue_after_set:
   BYTE(index_of_interacting_tile) = rt;
 
   int dir = link_direction_facing >> 1;
-  int scratch_1_var = dir * 14;
 
   int r2 = kPlayerOamOtherOffs[dir * 40 + yt] + rt;
   int r4loc = kPlayerOamSpriteLocs[r2];
 
-  link_palette_bits_of_oam = overworld_palette_swap_flag ? 0 : 0xe00;
+  link_palette_bits_of_oam = palette_swap_flag ? 0 : 0xe00;
   link_dma_var1 = link_dma_var2 = 0;
 
   int xt = FindInByteArray(kPlayerOam_Tab5, yt, 7);
@@ -1097,19 +1096,23 @@ continue_after_set:
   }
 
   uint16 t;
-  bool skip_erase = true;
+  bool hide_shadow = true;
   if (is_standing_in_doorway && ((t = link_x_coord - BG2HOFS_copy2) < 4 || t >= 252 || (t = link_y_coord - BG2VOFS_copy2) < 4 || t >= 224) ||
-      (skip_erase = false,
+      (hide_shadow = false,
       submodule_index == 0 && countdown_for_blink && --countdown_for_blink >= 4 && (countdown_for_blink & 1) == 0 ||
       link_visibility_status == 12 ||
       link_cape_mode != 0)) {
+    int shadow_oam_pos = (!hide_shadow && link_visibility_status != 12) ?
+        (scratch_0_var ? kShadow_oam_indexes_1 : kShadow_oam_indexes_0)[r4loc] >> 2 : -10;
+
     // This appears to hide link by setting the extended bits of the oam to hide them from the screen.
     // It doesn't really play well with the widescreen modes, so change how it's done.
     if (enhanced_features0 & kFeatures0_WidescreenVisualFixes) {
       OamEnt *oam = &oam_buf[sort_sprites_offset_into_oam_buffer >> 2];
-      oam[0].y = oam[1].y = oam[2].y = oam[3].y = 0xf0;
-      oam[4].y = oam[5].y = oam[6].y = oam[7].y = 0xf0;
-      oam[8].y = oam[9].y = oam[10].y = oam[11].y = 0xf0;
+      for (int i = 0; i < 12; i++) {
+        if (i < shadow_oam_pos || i > shadow_oam_pos + 1)
+          oam[i].y = 0xf0;
+      }
     } else {
       uint8 *p = &bytewise_extended_oam[sort_sprites_offset_into_oam_buffer >> 2];
       WORD(p[0]) = 0x101;
@@ -1118,10 +1121,9 @@ continue_after_set:
       WORD(p[6]) = 0x101;
       WORD(p[8]) = 0x101;
       WORD(p[10]) = 0x101;
-    }
-    if (link_visibility_status != 12 && !skip_erase) {
-      int oam_pos = ((scratch_0_var ? kShadow_oam_indexes_1 : kShadow_oam_indexes_0)[r4loc] + sort_sprites_offset_into_oam_buffer)>>2;
-      WORD(bytewise_extended_oam[oam_pos]) = 0;
+      // Clear the bit again for the shadow oam so it's not hidden?
+      if (shadow_oam_pos >= 0)
+        WORD(p[shadow_oam_pos]) = 0;
     }
   }
 
@@ -1248,7 +1250,6 @@ void LinkOam_DrawFootObject(int r4loc, uint8 oam_x, uint8 oam_y) {  // 8daed1
   oam_y += kOffsToShadowGivenDir_Y[i];
 
   int oam_pos = (kShadow_oam_indexes_1[r4loc] + sort_sprites_offset_into_oam_buffer)>>2;
-  uint8 animst = secondary_water_grass_timer;
 
   uint8 yv;
   if (draw_water_ripples_or_grass == 2) {
