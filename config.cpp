@@ -71,9 +71,9 @@ static bool has_keynameid[countof(kKeyNameId)];
 
 bool KeyMapHash_Add(uint16 key, uint16 cmd) {
   if ((keymap_hash_size & 0xff) == 0) {
-    if (keymap_hash_size > 10000) 
+    if (keymap_hash_size > 10000)
       Die("Too many keys");
-    keymap_hash = realloc(keymap_hash, sizeof(KeyMapHashEnt) * (keymap_hash_size + 256));
+    keymap_hash = (KeyMapHashEnt*)realloc(keymap_hash, sizeof(KeyMapHashEnt) * (keymap_hash_size + 256));
   }
   int i = keymap_hash_size++;
   KeyMapHashEnt *ent = &keymap_hash[i];
@@ -368,7 +368,7 @@ void ParseConfigFile() {
     next_p = eol ? eol + 1 : NULL;
     eol = eol ? eol : p + strlen(p);
     // strip comments
-    char *comment = memchr(p, '#', eol - p);
+    char *comment = static_cast<char *>(memchr(p, '#', eol - p));
     eol = (comment != 0) ? comment : eol;
     // strip trailing whitespace
     while (eol > p && (eol[-1] == '\r' || eol[-1] == ' ' || eol[-1] == '\t'))
@@ -386,7 +386,7 @@ void ParseConfigFile() {
     } else if (section == -2) {
       fprintf(stderr, "zelda3.ini:%d: Expecting [section]\n", lineno);
     } else {
-      char *equals = memchr(p, '=', eol - p);
+      char *equals = static_cast<char *>(memchr(p, '=', eol - p));
       if (equals == NULL) {
         fprintf(stderr, "zelda3.ini:%d: Expecting 'key=value'\n", lineno);
       } else {

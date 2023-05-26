@@ -1,4 +1,6 @@
+.idea/
 /.vs/
+cmake-*/
 /packages/
 /.vscode/
 .DS_Store

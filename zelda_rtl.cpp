@@ -309,7 +309,7 @@ static void ZeldaRunGameLoop() {
 
 void ZeldaInitialize() {
   g_zenv.dma = dma_init(NULL);
-  g_zenv.ppu = ppu_init(NULL);
+  g_zenv.ppu = ppu_init();
   g_zenv.ram = g_ram;
   g_zenv.sram = (uint8*)calloc(8192, 1);
   g_zenv.vram = g_zenv.ppu->vram;
@@ -400,7 +400,7 @@ void ByteArray_Resize(ByteArray *arr, size_t new_size) {
     arr->capacity = new_size < minsize ? minsize : new_size;
     void *data = realloc(arr->data, arr->capacity);
     if (!data) Die("memory allocation failed");
-    arr->data = data;
+    arr->data = static_cast<uint8 *>(data);
   }
 }
 
@@ -426,7 +426,7 @@ void ByteArray_AppendVl(ByteArray *arr, uint32 v) {
 }
 
 void saveFunc(void *ctx_in, void *data, size_t data_size) {
-  ByteArray_AppendData((ByteArray *)ctx_in, data, data_size);
+  ByteArray_AppendData((ByteArray *)ctx_in, (const uint8_t*)data, data_size);
 }
 
 typedef struct LoadFuncState {
@@ -476,7 +476,7 @@ static void LoadSnesState(SaveLoadFunc *func, void *ctx) {
   SpcPlayer_CopyVariablesFromRam(g_zenv.player);
   // This is not stored in the snapshot
   g_zenv.player->timer_cycles = 0;
-  
+
   // Ensure emulator has the up-to-date state too
   EmuSynchronizeWholeState();
 
