@@ -1,7 +1,8 @@
+#ifndef __amigaos3__
 #include "third_party/gl_core/gl_core_3_1.h"
 #include <SDL.h>
-#include <stdio.h>
-#include <stdbool.h>
+#include <cstdio>
+
 #include "types.h"
 #include "util.h"
 #include "glsl_shader.h"
@@ -37,12 +38,12 @@ static void GL_APIENTRY MessageCallback(GLenum source,
 
 static bool OpenGLRenderer_Init(SDL_Window *window) {
   g_window = window;
-  SDL_GLContext context = SDL_GL_CreateContext(window);
-  (void)context;
+  //SDL_GLContext context = SDL_GL_CreateContext(window);
+  //(void)context;
 
-  SDL_GL_SetSwapInterval(1);
-  ogl_LoadFunctions();
-
+  //SDL_GL_SetSwapInterval(1);
+  //ogl_LoadFunctions();
+/*
   if (!g_opengl_es) {
     if (!ogl_IsVersionGEQ(3, 3))
       Die("You need OpenGL 3.3");
@@ -98,6 +99,7 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
     gl_Position = vec4(aPos, 1.0);
     TexCoord = vec2(aTexCoord.x, aTexCoord.y);
   }
+
 );
 
   const GLchar *vs_code_es = "#version 300 es\n" CODE(
@@ -171,7 +173,7 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
 
   if (g_config.shader)
     g_glsl_shader = GlslShader_CreateFromFile(g_config.shader, g_opengl_es);
-
+*/
   return true;
 }
 
@@ -264,3 +266,4 @@ void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es) {
   *funcs = kOpenGLRendererFuncs;
 }
 
+#endif

@@ -2203,12 +2203,12 @@ void Dungeon_Store2x2(uint16 pos, uint16 t0, uint16 t1, uint16 t2, uint16 t3, ui
 
 uint16 Dungeon_MapVramAddr(uint16 pos) {
   pos *= 2;
-  return swap16(((pos & 0x40) << 4) | ((pos & 0x303f) >> 1) | ((pos & 0xf80) >> 2));
+  return _s16(((pos & 0x40) << 4) | ((pos & 0x303f) >> 1) | ((pos & 0xf80) >> 2));
 }
 
 uint16 Dungeon_MapVramAddrNoSwap(uint16 pos) {
   pos *= 2;
-  return ((pos & 0x40) << 4) | ((pos & 0x303f) >> 1) | ((pos & 0xf80) >> 2);
+  return _s16((pos & 0x40) << 4) | ((pos & 0x303f) >> 1) | ((pos & 0xf80) >> 2);
 }
 
 void Door_Up_EntranceDoor(uint16 dsto) {
@@ -6505,7 +6505,7 @@ void Module07_Dungeon() {  // 8287a2
   Dungeon_HandleLayerEffect();
   kDungeonSubmodules[submodule_index]();
 
-  // When having the somaria on door button and exiting in skull woods, 
+  // When having the somaria on door button and exiting in skull woods,
   // don't overwrite submodule_index
   if (enhanced_features0 & kFeatures0_MiscBugFixes && main_module_index != 7)
     goto skip;

@@ -1,9 +1,9 @@
 #ifndef ZELDA3_TYPES_H_
 #define ZELDA3_TYPES_H_
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdbool.h>
+#include <cstdint>
+#include <cstdlib>
+#include "sdl2_to_1_2_backports.h"
 
 // Build time config options
 enum {
@@ -55,6 +55,13 @@ static FORCEINLINE uint UintMax(uint a, uint b) { return a > b ? a : b; }
 // windows.h defines this too
 #ifdef HIBYTE
 #undef HIBYTE
+#endif
+#if defined(__BIG_ENDIAN__) || defined(__AMIGA__)
+#define _s16(x) SDL_Swap16(x)
+#define _s32(x) SDL_Swap32(x)
+#else
+#define _s16(x) x
+#define _s32(x) x
 #endif
 
 #define BYTE(x) (*(uint8*)&(x))

@@ -1,7 +1,8 @@
 #include "util.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
+#include <cstdio>
+#include <cstring>
+#include <cstdarg>
+#include "sdl2_to_1_2_backports.h"
 
 char *NextDelim(char **s, int sep) {
   char *r = *s;
@@ -45,7 +46,7 @@ uint8 *ReadWholeFile(const char *name, size_t *length) {
   fseek(f, 0, SEEK_END);
   size_t size = ftell(f);
   rewind(f);
-  uint8 *buffer = (uint8 *)malloc(size + 1);
+  auto *buffer = (uint8 *)malloc(size + 1);
   if (!buffer) Die("malloc failed");
   // Always zero terminate so this function can be used also for strings.
   buffer[size] = 0;
@@ -174,22 +175,24 @@ void ByteArray_AppendByte(ByteArray *arr, uint8 v) {
 // Automatically selects between 16 or 32 bit indexes. Can hold up to 8192 elements in 16-bit mode.
 MemBlk FindIndexInMemblk(MemBlk data, size_t i) {
   if (data.size < 2)
-    return (MemBlk) { 0, 0 };
+    return (MemBlk) { nullptr, 0 };
   size_t end = data.size - 2, left_off, right_off;
-  size_t mx = *(uint16 *)(data.ptr + end);
+  size_t mx = _s16(*(uint16 *)(data.ptr + end));
   if (mx < 8192) {
     if (i > mx || mx * 2 > end)
-      return (MemBlk) { 0, 0 };
-    left_off = ((i == 0) ? mx * 2 : mx * 2 + *(uint16 *)(data.ptr + i * 2 - 2));
-    right_off = (i == mx) ? end : mx * 2 + *(uint16 *)(data.ptr + i * 2);
+      return (MemBlk) { nullptr, 0 };
+    left_off = ((i == 0) ? mx * 2 : mx * 2 + _s16(*(uint16 *)(data.ptr + i * 2 - 2)));
+    right_off = (i == mx) ? end : mx * 2 + _s16(*(uint16 *)(data.ptr + i * 2));
   } else {
     mx -= 8192;
     if (i > mx || mx * 4 > end)
-      return (MemBlk) { 0, 0 };
-    left_off = ((i == 0) ? mx * 4 : mx * 4 + *(uint32 *)(data.ptr + i * 4 - 4));
-    right_off = (i == mx) ? end : mx * 4 + *(uint32 *)(data.ptr + i * 4);
+      return (MemBlk) { nullptr, 0 };
+    left_off = ((i == 0) ? mx * 4 : mx * 4 + _s32(*(uint32 *)(data.ptr + i * 4 - 4)));
+    right_off = (i == mx) ? end : mx * 4 + _s32(*(uint32 *)(data.ptr + i * 4));
   }
-  if (left_off > right_off || right_off > end)
-    return (MemBlk) { 0, 0 };
+	printf("[FindIndexInMemblk] %zu %zu %zu %zu\n", end, mx, left_off, right_off);
+
+	if (left_off > right_off || right_off > end)
+	  return (MemBlk) { nullptr, 0 };
   return (MemBlk) { data.ptr + left_off, right_off - left_off };
 }

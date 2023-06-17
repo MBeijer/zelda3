@@ -851,7 +851,7 @@ void LoadDefaultGraphics() {  // 80e2d0
   int num = 64;
   do {
     for (int i = 7; i >= 0; i--, src += 2) {
-      *vram_ptr++ = WORD(src[0]);
+      *vram_ptr++ = _s16(WORD(src[0]));
       tmp[i] = src[0] | src[1];
     }
     for (int i = 7; i >= 0; i--, src++) {
@@ -921,11 +921,14 @@ void Graphics_LoadChrHalfSlot() {  // 80e3fa
     uint8 *src = sprdata, *src2 = sprdata + 16;
     int n = 8;
     do {
-      uint16 t = WORD(src[0]);
+      uint16 t = _s16(WORD(src[0]));
       uint8 u = src2[0];
-      WORD(dst[0]) = t;
-      WORD(dst[16]) = (t | (t >> 8) | u) << 8 | u;
-      src += 2, src2 += 1, dst += 2;
+
+      WORD(dst[0]) = (t);
+      WORD(dst[16]) = ((t | (t >> 8) | u) << 8 | u);
+		printf("[Graphics_LoadChrHalfSlot] %d %d %d %d\n", t, u, WORD(dst[0]), WORD(dst[16]));
+
+		src += 2, src2 += 1, dst += 2;
     } while (--n);
     dst += 16;
   } while (--num);
@@ -937,9 +940,9 @@ void TransferFontToVRAM() {  // 80e556
 
 void Do3To4High(uint16 *vram_ptr, const uint8 *decomp_addr) {  // 80e5af
   for (int j = 0; j < 64; j++) {
-    uint16 *t = (uint16 *)&dung_line_ptrs_row0;
+    auto *t = (uint16 *)&dung_line_ptrs_row0;
     for (int i = 7; i >= 0; i--, decomp_addr += 2) {
-      uint16 d = *(uint16 *)decomp_addr;
+      uint16 d = _s16(*(uint16 *)decomp_addr);
       t[i] = (d | (d >> 8)) & 0xff;
       *vram_ptr++ = d;
     }
@@ -953,7 +956,7 @@ void Do3To4High(uint16 *vram_ptr, const uint8 *decomp_addr) {  // 80e5af
 void Do3To4Low(uint16 *vram_ptr, const uint8 *decomp_addr) {  // 80e63c
   for (int j = 0; j < 64; j++) {
     for (int i = 0; i < 8; i++, decomp_addr += 2)
-      *vram_ptr++ = *(uint16 *)decomp_addr;
+      *vram_ptr++ = _s16(*(uint16 *)decomp_addr);
     for (int i = 0; i < 8; i++, decomp_addr += 1)
       *vram_ptr++ = *decomp_addr;
   }
@@ -1019,7 +1022,7 @@ int Decompress(uint8 *dst, const uint8 *src) {  // 80e79e
       len += ((cmd & 3) << 8) + 1;
       cmd = (cmd << 3) & 0xe0;
     }
-    //printf("%d: %d,%d\n", (int)(dst - dst_org), cmd, len);
+    printf("%d: %d,%d\n", (int)(dst - dst_org), cmd, len);
     if (cmd == 0) {
       do {
         *dst++ = *src++;
@@ -1967,7 +1970,7 @@ void Palette_Restore_BG_And_HUD() {  // 8ed8fb
   Palette_Restore_Coldata();
 }
 
-/* Summary of sprite palette usage 
+/* Summary of sprite palette usage
 0l: kPalette_SpriteAux3[palette_sp0l]
 0r: kPalette_MiscSprite[7 / 9] or kPalette_DungBgMain[(palette_main_indoors >> 1) * 90]
 1 : common sprites

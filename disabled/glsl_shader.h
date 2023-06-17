@@ -1,3 +1,4 @@
+#ifndef __amigaos3__
 #ifndef ZELDA3_GLSL_SHADER_H_
 #define ZELDA3_GLSL_SHADER_H_
 
@@ -97,3 +98,4 @@ void GlslShader_Render(GlslShader *gs, GlTextureWithSize *tex, int viewport_x, i
 
 
 #endif  // ZELDA3_GLSL_SHADER_H_
+#endif // __amigaos3__

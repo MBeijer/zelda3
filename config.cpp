@@ -1,8 +1,8 @@
 #include "config.h"
 #include "types.h"
-#include <stdio.h>
-#include <string.h>
-#include <SDL.h>
+#include <cstdio>
+#include <cstring>
+#include "sdl2_to_1_2_backports.h"
 #include "features.h"
 #include "util.h"
 
@@ -15,7 +15,8 @@ enum {
 
 Config g_config;
 
-#define REMAP_SDL_KEYCODE(key) ((key) & SDLK_SCANCODE_MASK ? kKeyMod_ScanCode : 0) | (key) & (kKeyMod_ScanCode - 1)
+#define REMAP_SDL_KEYCODE(key) key //((key) & 0xFF)
+
 #define _(x) REMAP_SDL_KEYCODE(x)
 #define S(x) REMAP_SDL_KEYCODE(x) | kKeyMod_Shift
 #define A(x) REMAP_SDL_KEYCODE(x) | kKeyMod_Alt
@@ -107,20 +108,22 @@ static int KeyMapHash_Find(uint16 key) {
 }
 
 int FindCmdForSdlKey(SDL_Keycode code, SDL_Keymod mod) {
-  if (code & ~(SDLK_SCANCODE_MASK | 0x1ff))
-    return 0;
-  int key = 0;
-  if (code != SDLK_LALT && code != SDLK_RALT)
-    key |=  mod & KMOD_ALT ? kKeyMod_Alt : 0;
-  if (code != SDLK_LCTRL && code != SDLK_RCTRL)
-    key |= mod & KMOD_CTRL ? kKeyMod_Ctrl : 0;
-  if (code != SDLK_LSHIFT && code != SDLK_RSHIFT)
-    key |= mod & KMOD_SHIFT ? kKeyMod_Shift : 0;
-  key |= REMAP_SDL_KEYCODE(code);
-  return KeyMapHash_Find(key);
+	if (code & 0xFF80)
+		return 0;
+	int key = 0;
+	if (code != SDLK_LALT && code != SDLK_RALT)
+		key |= mod & KMOD_ALT ? kKeyMod_Alt : 0;
+	if (code != SDLK_LCTRL && code != SDLK_RCTRL)
+		key |= mod & KMOD_CTRL ? kKeyMod_Ctrl : 0;
+	if (code != SDLK_LSHIFT && code != SDLK_RSHIFT)
+		key |= mod & KMOD_SHIFT ? kKeyMod_Shift : 0;
+	key |= REMAP_SDL_KEYCODE(code);
+
+	return KeyMapHash_Find(key);
 }
 
 static void ParseKeyArray(char *value, int cmd, int size) {
+	/*
   char *s;
   int i = 0;
   for (; i < size && (s = NextDelim(&value, ',')) != NULL; i++, cmd += (cmd != 0)) {
@@ -146,6 +149,7 @@ static void ParseKeyArray(char *value, int cmd, int size) {
     if (!KeyMapHash_Add(key_with_mod | REMAP_SDL_KEYCODE(key), cmd))
       fprintf(stderr, "Duplicate key: '%s'\n", s);
   }
+  */
 }
 
 typedef struct GamepadMapEnt {
@@ -169,7 +173,7 @@ static void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd) {
   if ((joymap_size & 0xff) == 0) {
     if (joymap_size > 1000)
       Die("Too many joypad keys");
-    joymap_ents = realloc(joymap_ents, sizeof(GamepadMapEnt) * (joymap_size + 64));
+    joymap_ents = static_cast<GamepadMapEnt *>(realloc(joymap_ents, sizeof(GamepadMapEnt) * (joymap_size + 64)));
     if (!joymap_ents) Die("realloc failure");
   }
   uint16 *p = &joymap_first[button];
@@ -315,7 +319,7 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     for (int i = 0; i < countof(kKeyNameId); i++) {
       if (StringEqualsNoCase(key, kKeyNameId[i].name)) {
         has_keynameid[i] = true;
-        ParseKeyArray(value, kKeyNameId[i].id, kKeyNameId[i].size);
+        //ParseKeyArray(value, kKeyNameId[i].id, kKeyNameId[i].size);
         return true;
       }
     }
@@ -358,7 +362,7 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return true;
     } else if (StringEqualsNoCase(key, "OutputMethod")) {
       g_config.output_method = StringEqualsNoCase(value, "SDL-Software") ? kOutputMethod_SDLSoftware :
-                               StringEqualsNoCase(value, "OpenGL") ? kOutputMethod_OpenGL : 
+                               StringEqualsNoCase(value, "OpenGL") ? kOutputMethod_OpenGL :
                                StringEqualsNoCase(value, "OpenGL ES") ? kOutputMethod_OpenGL_ES :
                                                                         kOutputMethod_SDL;
       return true;
@@ -394,7 +398,7 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
         g_config.enable_msu = kMsuEnabled_MsuDeluxe;
       else if (StringEqualsNoCase(value, "deluxe-opuz"))
         g_config.enable_msu = kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz;
-      else 
+      else
         return ParseBool(value, (bool*)&g_config.enable_msu);
       return true;
     } else if (StringEqualsNoCase(key, "MSUPath")) {
@@ -484,7 +488,7 @@ static bool ParseOneConfigFile(const char *filename, int depth) {
   char *filedata = (char*)ReadWholeFile(filename, NULL), *p;
   if (!filedata)
     return false;
-  
+
   int section = -2;
   g_config.memory_buffer = filedata;
 

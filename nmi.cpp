@@ -1,3 +1,4 @@
+#include "sdl2_to_1_2_backports.h"
 #include "nmi.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -6,6 +7,7 @@
 #include "snes/ppu.h"
 #include "assets.h"
 #include "audio.h"
+#include "main.h"
 
 static const uint8 kNmiVramAddrs[] = {
   0, 0, 4, 8, 12, 8, 12, 0, 4, 0, 8, 4, 12, 4, 12, 0,
@@ -110,7 +112,7 @@ static void Interrupt_NMI_AudioParts_Locked() {
   if (music_control == 0) {
 //    if (zelda_apu_read(APUI00) == last_music_control)
 //      zelda_apu_write(APUI00, 0);
-    // Zelda causes unwanted music change when going in a portal. last_music_control doesn't hold the 
+    // Zelda causes unwanted music change when going in a portal. last_music_control doesn't hold the
     // song but the last applied effect
   } else if (!ZeldaIsPlayingMusicTrackWithBug(music_control)) {
     last_music_control = music_control;

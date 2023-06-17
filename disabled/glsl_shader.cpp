@@ -1,4 +1,5 @@
 // This file is heavily influenced by Snes9x
+#ifndef __amigaos3__
 #include "third_party/gl_core/gl_core_3_1.h"
 #include "glsl_shader.h"
 #include "util.h"
@@ -11,6 +12,7 @@
 #define STBI_ONLY_PNG
 #define STBI_MAX_DIMENSIONS 4096
 #define STBI_NO_FAILURE_STRINGS
+
 #include "third_party/stb/stb_image.h"
 
 static GlslPass *ParseConfigKeyPass(GlslShader *gs, const char *key, const char *match) {
@@ -657,3 +659,4 @@ void GlslShader_Render(GlslShader *gs, GlTextureWithSize *tex, int viewport_x, i
   gs->frame_count++;
 }
 
+#endif

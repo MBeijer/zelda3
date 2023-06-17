@@ -54,7 +54,7 @@ void snes_saveload(Snes *snes, SaveLoadFunc *func, void *ctx) {
   cpu_saveload(snes->cpu, func, ctx);
   apu_saveload(snes->apu, func, ctx);
   dma_saveload(snes->dma, func, ctx);
-  ppu_saveload(snes->ppu, func, ctx);
+  snes->ppu->saveload(func, ctx);
   cart_saveload(snes->cart, func, ctx);
 
   func(ctx, &snes->hPos, offsetof(Snes, openBus) + 1 - offsetof(Snes, hPos));
@@ -70,7 +70,7 @@ void snes_reset(Snes* snes, bool hard) {
   cpu_reset(snes->cpu);
   apu_reset(snes->apu);
   dma_reset(snes->dma);
-  ppu_reset(snes->ppu);
+	snes->ppu->reset();
   input_reset(snes->input1);
   input_reset(snes->input2);
   if (hard) memset(snes->ram, 0, 0x20000);
@@ -145,7 +145,7 @@ void snes_doAutoJoypad(Snes* snes) {
 
 uint8_t snes_readBBus(Snes* snes, uint8_t adr) {
   if(adr < 0x40) {
-    return ppu_read(snes->ppu, adr);
+    return snes->ppu->read(adr);
   }
   if(adr < 0x80) {
     //apu_cycle(snes->apu);//spc_runOpcode(snes->apu->spc);
@@ -161,7 +161,7 @@ uint8_t snes_readBBus(Snes* snes, uint8_t adr) {
 
 void snes_writeBBus(Snes* snes, uint8_t adr, uint8_t val) {
   if(adr < 0x40) {
-    ppu_write(snes->ppu, adr, val);
+	  snes->ppu->write(adr, val);
     return;
   }
   if(adr < 0x80) {
@@ -262,7 +262,7 @@ static void snes_writeReg(Snes* snes, uint16_t adr, uint8_t val) {
     case 0x4201: {
       if(!(val & 0x80) && snes->ppuLatch) {
         // latch the ppu
-        ppu_read(snes->ppu, 0x37);
+		  snes->ppu->read(0x37);
       }
       snes->ppuLatch = val & 0x80;
       break;

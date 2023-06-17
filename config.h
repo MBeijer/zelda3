@@ -1,6 +1,6 @@
 #pragma once
 #include "types.h"
-#include <SDL_keycode.h>
+#include "sdl2_to_1_2_backports.h"
 
 enum {
   kKeys_Null,
