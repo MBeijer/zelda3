@@ -102,8 +102,8 @@ void Polyhedral_SetShapePointer() {  // 89f83d
   const PolyConfig *poly_config = &kPolyConfigs[poly_which_model];
   poly_config_num_vertex = poly_config->num_vtx;
   poly_config_num_polys = poly_config->num_poly;
-  poly_fromlut_ptr2 = poly_config->vtx_val;
-  poly_fromlut_ptr4 = poly_config->polys_val;
+  poly_fromlut_ptr2 = (poly_config->vtx_val);
+  poly_fromlut_ptr4 = (poly_config->polys_val);
 }
 
 void Polyhedral_SetRotationMatrix() {  // 89f864
@@ -189,7 +189,7 @@ int16 Polyhedral_CalculateCrossProduct() {  // 89fb24
 }
 
 void Polyhedral_SetColorMask(int c) {  // 89fcae
-  uint32 v = kPoly_RasterColors[c];
+  uint32 v = (kPoly_RasterColors[c]);
   poly_raster_color0 = v;
   poly_raster_color1 = v >> 16;
 }
@@ -239,8 +239,8 @@ void Polyhedral_DrawFace() {  // 89fd1e
 }
 
 void Polyhedral_FillLine() {  // 89fdcf
-  uint16 left = kPoly_LeftSideMask[(poly_x0_frac >> 8) & 7];
-  uint16 right = kPoly_RightSideMask[(poly_x1_frac >> 8) & 7];
+  uint16 left = (kPoly_LeftSideMask[(poly_x0_frac >> 8) & 7]);
+  uint16 right = (kPoly_RightSideMask[(poly_x1_frac >> 8) & 7]);
   poly_tmp2 = (poly_x0_frac >> 8) & 0x38;
   int d0 = ((poly_x1_frac >> 8) & 0x38);
   uint16 *ptr = (uint16*)&g_ram[poly_raster_dst_ptr + d0 * 4];

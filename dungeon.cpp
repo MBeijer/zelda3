@@ -2664,7 +2664,7 @@ void Dungeon_LoadRoom() {  // 81873a
 void RoomDraw_DrawAllObjects(const uint8 *level_data) {  // 8188e4
   for (;;) {
     dung_draw_width_indicator = dung_draw_height_indicator = 0;
-    uint16 d = WORD(level_data[dung_load_ptr_offs]);
+    uint16 d = (WORD(level_data[dung_load_ptr_offs]));
     if (d == 0xffff)
       return;
     if (d == 0xfff0)
@@ -2673,7 +2673,7 @@ void RoomDraw_DrawAllObjects(const uint8 *level_data) {  // 8188e4
   }
   for (;;) {
     dung_load_ptr_offs += 2;
-    uint16 d = WORD(level_data[dung_load_ptr_offs]);
+    uint16 d = (WORD(level_data[dung_load_ptr_offs]));
     if (d == 0xffff)
       return;
     RoomData_DrawObject_Door(d);
@@ -3721,7 +3721,7 @@ void Dungeon_LoadHeader() {  // 81b564
   dung_overlay_to_load = 0;
   dung_index_x3 = dungeon_room_index * 3;
 
-  uint16 x = save_dung_info[dungeon_room_index];
+  uint16 x = _s16(save_dung_info[dungeon_room_index]);
   dung_door_opened = x & 0xf000;
   dung_door_opened_incl_adjacent = dung_door_opened | 0xf00;
   dung_savegame_state_bits = (x & 0xff0) << 4;
@@ -3729,8 +3729,8 @@ void Dungeon_LoadHeader() {  // 81b564
 
   const uint16 *dp = GetRoomDoorInfo(dungeon_room_index);
   int i = 0;
-  for (; dp[i] != 0xffff; i++)
-    dung_door_tilemap_address[i] = dp[i];
+  for (; _s16(dp[i]) != 0xffff; i++)
+    dung_door_tilemap_address[i] = _s16(dp[i]);
   dung_door_tilemap_address[i] = 0;
 
   if (((dungeon_room_index - 1) & 0xf) != 0xf)

@@ -54,7 +54,7 @@ void snes_saveload(Snes *snes, SaveLoadFunc *func, void *ctx) {
   cpu_saveload(snes->cpu, func, ctx);
   apu_saveload(snes->apu, func, ctx);
   dma_saveload(snes->dma, func, ctx);
-  snes->ppu->saveload(func, ctx);
+	snes->ppu->SaveLoad(func, ctx);
   cart_saveload(snes->cart, func, ctx);
 
   func(ctx, &snes->hPos, offsetof(Snes, openBus) + 1 - offsetof(Snes, hPos));

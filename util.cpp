@@ -10,7 +10,7 @@ char *NextDelim(char **s, int sep) {
     while (r[0] == ' ' || r[0] == '\t')
       r++;
     char *t = strchr(r, sep);
-    *s = t ? (*t++ = 0, t) : NULL;
+    *s = t ? (*t++ = 0, t) : nullptr;
   }
   return r;
 }
@@ -35,14 +35,14 @@ const char *StringStartsWithNoCase(const char *a, const char *b) {
     if (bb == 0)
       return a;
     if (aa != bb)
-      return NULL;
+      return nullptr;
   }
 }
 
 uint8 *ReadWholeFile(const char *name, size_t *length) {
   FILE *f = fopen(name, "rb");
-  if (f == NULL)
-    return NULL;
+  if (f == nullptr)
+    return nullptr;
   fseek(f, 0, SEEK_END);
   size_t size = ftell(f);
   rewind(f);
@@ -59,11 +59,11 @@ uint8 *ReadWholeFile(const char *name, size_t *length) {
 
 char *NextLineStripComments(char **s) {
   char *p = *s;
-  if (p == NULL)
-    return NULL;
+  if (p == nullptr)
+    return nullptr;
   // find end of line
   char *eol = strchr(p, '\n');
-  *s = eol ? eol + 1 : NULL;
+  *s = eol ? eol + 1 : nullptr;
   eol = eol ? eol : p + strlen(p);
   // strip comments
   char *comment = static_cast<char *>(memchr(p, '#', eol - p));

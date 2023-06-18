@@ -947,6 +947,10 @@ static void LoadAssets() {
     g_asset_sizes[i] = size;
     g_asset_ptrs[i] = data + offset;
 
+	if (i == 3) {
+
+	}
+
 	printf("[asset] i: %d, size: %d, offset: %d\n", i, size, offset);
     offset += size;
   }

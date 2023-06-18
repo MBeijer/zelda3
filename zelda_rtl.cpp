@@ -170,7 +170,7 @@ static void ConfigurePpuSideSpace() {
     extra_left = kPpuExtraLeftRight, extra_right = kPpuExtraLeftRight;
     extra_bottom = 16;
   }
-  PpuSetExtraSideSpace(g_zenv.ppu, extra_left, extra_right, extra_bottom);
+	g_zenv.ppu->SetExtraSideSpace(extra_left, extra_right, extra_bottom);
 }
 
 void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
@@ -186,13 +186,13 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
   // Cheat: Let the PPU impl know about the hdma perspective correction so it can avoid guessing.
   if ((render_flags & kPpuRenderFlags_4x4Mode7) && g_zenv.ppu->mode == 7) {
     if (hdma_chans[0].table == kMapModeHdma0)
-      PpuSetMode7PerspectiveCorrection(g_zenv.ppu, kMapMode_Zooms1[0], kMapMode_Zooms1[223]);
+		g_zenv.ppu->SetMode7PerspectiveCorrection(kMapMode_Zooms1[0], kMapMode_Zooms1[223]);
     else if (hdma_chans[0].table == kMapModeHdma1)
-      PpuSetMode7PerspectiveCorrection(g_zenv.ppu, kMapMode_Zooms2[0], kMapMode_Zooms2[223]);
+		g_zenv.ppu->SetMode7PerspectiveCorrection(kMapMode_Zooms2[0], kMapMode_Zooms2[223]);
     else if (hdma_chans[0].table == kAttractIndirectHdmaTab)
-      PpuSetMode7PerspectiveCorrection(g_zenv.ppu, hdma_table_dynamic[0], hdma_table_dynamic[223]);
+		g_zenv.ppu->SetMode7PerspectiveCorrection(hdma_table_dynamic[0], hdma_table_dynamic[223]);
     else
-      PpuSetMode7PerspectiveCorrection(g_zenv.ppu, 0, 0);
+		g_zenv.ppu->SetMode7PerspectiveCorrection(0, 0);
   }
 
   if (g_zenv.ppu->extraLeftRight != 0 || render_flags & kPpuRenderFlags_Height240)
@@ -212,7 +212,7 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
       }
     }
 
-    ppu_runLine(g_zenv.ppu, i);
+	  g_zenv.ppu->runLine(i);
     SimpleHdma_DoLine(&hdma_chans[0]);
     SimpleHdma_DoLine(&hdma_chans[1]);
   }
@@ -371,7 +371,7 @@ static void InternalSaveLoad(SaveLoadFunc *func, void *ctx) {
   dsp_saveload(g_zenv.player->dsp, func, ctx); // 3024 bytes of dsp
   func(ctx, junk, 15); // spc junk
   dma_saveload(g_zenv.dma, func, ctx); // 192 bytes of dma state
-  g_zenv.ppu->saveload(func, ctx); // 66619 + 512 + 174
+	g_zenv.ppu->SaveLoad(func, ctx); // 66619 + 512 + 174
   func(ctx, g_zenv.sram, 0x2000);  // 8192 bytes of sram
   func(ctx, junk, 58); // snes junk
   func(ctx, g_zenv.ram, 0x20000);  // 0x20000 bytes of ram
@@ -741,7 +741,7 @@ bool ZeldaRunFrame(int inputs) {
     EmuSyncMemoryRegion(&g_ram[kRam_CrystalRotateCounter], 1);
   }
 
-  if (g_emu_runframe == NULL || enhanced_features0 != 0 || g_zenv.dialogue_flags) {
+  if (g_emu_runframe == nullptr || enhanced_features0 != 0 || g_zenv.dialogue_flags) {
     // can't compare against real impl when running with extra features.
     ZeldaRunFrameInternal(inputs, run_what);
   } else {

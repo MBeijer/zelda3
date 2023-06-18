@@ -2195,7 +2195,7 @@ enum {
   kTextCmd_EU_2 = 0x83,       // frequency 496
   kTextCmd_EU_3 = 0x84,       // frequency 347
   kTextCmd_EU_Name = 0x85,    // frequency 64
-  kTextCmd_EU_Rest = 0x87,    
+  kTextCmd_EU_Rest = 0x87,
 };
 
 #define TEXTCMD_MULTIBYTE(a) ((a) & 1)
@@ -2519,7 +2519,7 @@ void VWF_RenderSingle(int c) {  // 8ecab8
     vwf_var1 = kVWF_RenderCharacter_linePositions[vwf_curline>>1];
     vwf_flag_next_line = 0;
   }
-  
+
   const uint8 *kFontData = FindIndexInMemblk(g_zenv.dialogue_font_blk, 0).ptr;
   uint8 width = FindIndexInMemblk(g_zenv.dialogue_font_blk, 1).ptr[c];
   assert(width <= 8);
@@ -2529,10 +2529,10 @@ void VWF_RenderSingle(int c) {  // 8ecab8
   vwf_arr[i + 1] = arrval + width;
   uint16 r10 = (c & 0x70) * 2 + (c & 0xf);
   uint16 r0 = arrval * 2;
-  const uint16 *src2 = (uint16*)(kFontData + r10 * 16);
-  uint8 *mbuf = (uint8 *)messaging_buf;
+  const uint16 *src2 = ((uint16*)(kFontData + r10 * 16));
+  auto *mbuf = (uint8 *)messaging_buf;
   for (int i = 0; i != 16; i += 2) {
-    uint16 r4 = *src2++;
+    uint16 r4 = _s16(*src2++);
     int y = r0 + vwf_line_ptr;
     int x = (y & 0xff0) + i;
     y = (y >> 1) & 7;
@@ -2556,7 +2556,7 @@ void VWF_RenderSingle(int c) {  // 8ecab8
   uint16 r8 = vwf_line_ptr + 0x150;
   const uint16 *src3 = (uint16*)(kFontData + (r10 + 16) * 16);
   for (int i = 0; i != 16; i += 2) {
-    uint16 r4 = *src3++;
+    uint16 r4 = _s16(*src3++);
     int y = r8 + r0;
     int x = (y & 0xff0) + i;
     y = (y >> 1) & 7;

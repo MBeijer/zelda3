@@ -570,8 +570,8 @@ void Expand3To4High(uint8 *dst, const uint8 *src, const uint8 *base, int num) { 
     do {
       uint16 t = WORD(src[0]);
       uint8 u = src2[0];
-      WORD(dst[0]) = t;
-      WORD(dst[0x10]) = (t | (t >> 8) | u) << 8 | u;
+      WORD(dst[0]) = _s16(t);
+      WORD(dst[0x10]) = _s16((t | (t >> 8) | u) << 8 | u);
       src += 2, src2 += 1, dst += 2;
     } while (--n);
     dst += 16, src = src2;
@@ -781,8 +781,8 @@ void Do3To4High16Bit(uint8 *dst, const uint8 *src, int num) {  // 80df4f
     do {
       uint16 t = WORD(src[0]);
       uint8 u = src2[0];
-      WORD(dst[0]) = t;
-      WORD(dst[0x10]) = (t | (t >> 8) | u) << 8 | u;
+      WORD(dst[0]) = _s16(t);
+      WORD(dst[0x10]) = _s16((t | (t >> 8) | u) << 8 | u);
       src += 2, src2 += 1, dst += 2;
     } while (--n);
     dst += 16, src = src2;
@@ -795,8 +795,8 @@ void Do3To4Low16Bit(uint8 *dst, const uint8 *src, int num) {  // 80dfb8
     const uint8 *src2 = src + 0x10;
     int n = 8;
     do {
-      WORD(dst[0]) = WORD(src[0]);
-      WORD(dst[0x10]) = src2[0];
+      WORD(dst[0]) = _s16(WORD(src[0]));
+      WORD(dst[0x10]) = _s16(src2[0]);
       src += 2, src2 += 1, dst += 2;
     } while (--n);
     dst += 16, src = src2;

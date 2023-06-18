@@ -38,7 +38,7 @@ bool SetApplicationVolume(int volume_level) {
   ISimpleAudioVolume *simple_audio_volume = GetSimpleAudioVolume();
   if (!simple_audio_volume)
     return false;
-  HRESULT result = ISimpleAudioVolume_SetMasterVolume(simple_audio_volume, (float)(volume_level / 100.0), NULL);
+  HRESULT result = ISimpleAudioVolume_SetMasterVolume(simple_audio_volume, (float)(volume_level / 100.0), nullptr);
   ISimpleAudioVolume_Release(simple_audio_volume);
   return SUCCEEDED(result);
 }
@@ -47,7 +47,7 @@ bool SetApplicationMuted(bool muted) {
   ISimpleAudioVolume *simple_audio_volume = GetSimpleAudioVolume();
   if (!simple_audio_volume)
     return false;
-  HRESULT result = ISimpleAudioVolume_SetMute(simple_audio_volume, muted, NULL);
+  HRESULT result = ISimpleAudioVolume_SetMute(simple_audio_volume, muted, nullptr);
   ISimpleAudioVolume_Release(simple_audio_volume);
   return SUCCEEDED(result);
 }
@@ -70,7 +70,7 @@ static ISimpleAudioVolume *GetSimpleAudioVolume() {
   if (FAILED(result) || device == NULL)
     goto done;
 
-  result = IMMDevice_Activate(device, IID_IAudioSessionManager, CLSCTX_INPROC_SERVER, NULL, &audio_session_manager);
+  result = IMMDevice_Activate(device, IID_IAudioSessionManager, CLSCTX_INPROC_SERVER, nullptr, (void**)&audio_session_manager);
   if (FAILED(result) || audio_session_manager == NULL)
     goto done;
   result = IAudioSessionManager_GetSimpleAudioVolume(audio_session_manager, &GUID_NULL, 0, &simple_audio_volume);

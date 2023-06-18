@@ -126,31 +126,56 @@ public:
 
 	void reset();
 
-	void saveload(SaveLoadFunc *func, void *ctx);
+	void SaveLoad(SaveLoadFunc *func, void *ctx);
 
 	void BeginDrawing(uint8_t *buffer, size_t pitch, uint32_t render_flags);
 
 	// Returns the current render scale, 1x = 256px, 2x=512px, 4x=1024px
-	int GetCurrentRenderScale(uint32_t render_flags);
+	[[nodiscard]] int GetCurrentRenderScale(uint32_t render_flags) const;
 
 	uint8_t read(uint8_t adr);
 
 	void write(uint8_t adr, uint8_t val);
 
 	// Drawing
+	NOINLINE void DrawWholeLine(uint y);
+
 	void DrawBackgrounds(int y, bool sub);
+	void DrawBackground_mode7(uint y, bool sub, PpuZbufType z);
+	void DrawMode7Upsampled(uint y);
+	void DrawSprites(uint y, uint sub, bool clear_backdrop);
+	void DrawBackground_2bpp_mosaic(int y, bool sub, uint layer, PpuZbufType zhi, PpuZbufType zlo);
+	void DrawBackground_4bpp_mosaic(uint y, bool sub, uint layer, PpuZbufType zhi, PpuZbufType zlo);
+	void DrawBackground_2bpp(uint y, bool sub, uint layer, PpuZbufType zhi, PpuZbufType zlo);
+	void DrawBackground_4bpp(uint y, bool sub, uint layer, PpuZbufType zhi, PpuZbufType zlo);
+
+	static inline void ClearBackdrop(PpuPixelPrioBufs *buf);
+
+	void runLine(int line);
+
+	void SetMode7PerspectiveCorrection(int low, int high);
+
+	void SetExtraSideSpace(int left, int right, int bottom);
+
+	void handlePixel(int x, int y);
+
+	int getPixel(int x, int y, bool sub, int *r, int *g, int *b, int *pixel);
+
+	int getPixelForBgLayer(int x, int y, int layer, bool priority);
+
+	void calculateMode7Starts(int y);
+
+	int getPixelForMode7(int x, int layer, bool priority);
+
+	[[nodiscard]] bool getWindowState(int layer, int x) const;
+
+	bool evaluateSprites(int line);
 };
 
 Ppu *ppu_init();
 
 void ppu_free(Ppu *ppu);
 
-void ppu_handleVblank(Ppu *ppu);
 
-void ppu_runLine(Ppu *ppu, int line);
-
-void PpuSetMode7PerspectiveCorrection(Ppu *ppu, int low, int high);
-
-void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom);
 
 #endif  // ZELDA3_SNES_PPU_H_

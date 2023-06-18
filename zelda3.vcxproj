@@ -465,7 +465,7 @@
     <ClInclude Include="snes\dsp_regs.h" />
     <ClInclude Include="snes\input.h" />
     <ClInclude Include="snes\ppu.h" />
-    <ClInclude Include="snes\saveload.h" />
+    <ClInclude Include="snes\SaveLoad.h" />
     <ClInclude Include="snes\snes.h" />
     <ClInclude Include="snes\snes_regs.h" />
     <ClInclude Include="snes\spc.h" />
